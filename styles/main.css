@@ -1,0 +1,1786 @@
+/* 全局样式 */
+:root {
+    --primary-color: #4a6cf7;
+    --secondary-color: #f5f7fa;
+    --accent-color: #ff6b6b;
+    --text-color: #333;
+    --text-light: #666;
+    --border-color: #e1e5e9;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition: all 0.2s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #f8f9fa;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+/* 应用容器 */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 头部 */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: white;
+    box-shadow: var(--shadow-sm);
+    z-index: 100;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    flex: 0 0 auto;
+    margin-right: 1rem;
+}
+
+.header-center {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex: 1;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+}
+
+/* 下拉菜单样式 */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-color);
+    text-decoration: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+}
+
+.dropdown-toggle:hover {
+    color: var(--primary-color);
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+}
+
+.dropdown-toggle::after {
+    content: '';
+    display: inline-block;
+    margin-left: 0.255em;
+    vertical-align: 0.255em;
+    border-top: 0.3em solid;
+    border-right: 0.3em solid transparent;
+    border-bottom: 0;
+    border-left: 0.3em solid transparent;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: auto;
+    z-index: 1000;
+    display: none;
+    min-width: 10rem;
+    padding: 0.5rem 0;
+    margin: 0.125rem 0 0;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    text-align: left;
+    list-style: none;
+    background-color: white;
+    background-clip: padding-box;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    clear: both;
+    font-weight: 400;
+    color: var(--text-color);
+    text-align: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 0;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dropdown-item:hover {
+    color: var(--primary-color);
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+}
+
+.user-welcome {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-md);
+    color: var(--text-color);
+    font-weight: 500;
+    margin-right: 0.5rem; /* 与登出链接保持一定间距 */
+}
+
+.user-welcome i {
+    color: var(--primary-color);
+}
+
+/* 主要内容区域 */
+.app-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 面板基础样式 */
+.goals-panel, .stats-panel {
+    width: 280px;
+    background-color: white;
+    box-shadow: var(--shadow-sm);
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h2 {
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+/* 日历部分 */
+.calendar-section {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.calendar-header h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    color: var(--primary-color);
+    position: relative;
+    display: inline-block;
+}
+
+.calendar-header h2:hover {
+    transform: translateY(-2px);
+}
+
+.calendar-header h2::after {
+    display: none;
+}
+
+.calendar-header h2:hover::after {
+    display: none;
+}
+
+.calendar-grid {
+    background-color: white;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.weekday-headers {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.weekday-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 40px;
+    background-color: var(--secondary-color);
+    font-weight: 600;
+    color: var(--text-light);
+    flex: 1;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    /* 移除固定的行数，让内容决定行数 */
+}
+
+.calendar-day {
+    min-height: 100px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.calendar-day:nth-child(7n) {
+    border-right: none;
+}
+
+.calendar-day:hover {
+    background-color: rgba(74, 108, 247, 0.05);
+}
+
+.calendar-day.other-month {
+    color: var(--text-light);
+    background-color: #fafbfc;
+}
+
+.calendar-day.empty-day {
+    background-color: #fafbfc;
+    cursor: default;
+}
+
+.calendar-day.empty-day:hover {
+    background-color: #fafbfc;
+}
+
+.calendar-day.today {
+    /* 移除背景色，改为使用圆点标记 */
+    position: relative;
+}
+
+.calendar-day.today .day-number {
+    font-weight: 700;
+    color: var(--primary-color);
+    position: relative;
+}
+
+.today-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 6px;
+    height: 6px;
+    background-color: var(--primary-color);
+    border-radius: 50%;
+}
+
+.calendar-day.has-content {
+    background-color: rgba(74, 108, 247, 0.15);
+}
+
+.calendar-day.has-content-past {
+    background-color: rgba(255, 107, 107, 0.15);
+}
+
+.calendar-day.has-content-past.all-tasks-completed {
+    background-color: rgba(76, 175, 80, 0.15);
+}
+
+/* 新的过往日期样式 */
+.calendar-day.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.15);
+}
+
+.calendar-day.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.15);
+}
+
+.calendar-day.has-content-past-summary-only {
+    /* 不设置背景色和边框，只显示备注标记 */
+}
+
+.day-number {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.day-tasks {
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+.day-task-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.2rem;
+    padding-left: 0.5rem;
+    position: relative;
+}
+
+.day-task-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+}
+
+.day-task-item.completed::before {
+    background-color: #28a745;
+}
+
+.goal-marker {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.summary-marker {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    color: #6c757d;
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+/* 目标卡片 */
+.goal-card {
+    background-color: white;
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--primary-color);
+    transition: var(--transition);
+}
+
+.goal-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.goal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.goal-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.goal-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.goal-date {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+}
+
+.goal-countdown {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* 统计面板 */
+.stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 0.75rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-md);
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.streak-info {
+    text-align: center;
+    padding: 1rem;
+    background-color: rgba(255, 107, 107, 0.1);
+    border-radius: var(--radius-md);
+}
+
+.streak-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.streak-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #3a5bd9;
+}
+
+.btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+.btn-secondary:hover {
+    background-color: #e1e5e9;
+}
+
+/* 日历导航按钮样式 */
+.calendar-nav-btn {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.05) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-color) !important;
+    padding: 6px 12px;
+    min-width: 40px;
+}
+
+.calendar-nav-btn:hover {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15) !important;
+    border-color: var(--primary-color) !important;
+    color: var(--primary-color) !important;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.btn-icon {
+    padding: 0.25rem;
+    border-radius: 50%;
+}
+
+/* 模态框 */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+/* 批量任务输入模态框 - 更高层级 */
+#batch-task-input-modal {
+    z-index: 1100;
+}
+
+/* 确认对话框 - 最高层级 */
+#confirm-dialog {
+    z-index: 1200;
+}
+
+.confirm-dialog-content {
+    max-width: 400px;
+    text-align: center;
+}
+
+.confirm-dialog-content .modal-body {
+    padding: 1.5rem;
+}
+
+.confirm-dialog-content .modal-footer {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalFadeIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    font-size: 1.2rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-light);
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: var(--transition);
+}
+
+.close-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* 表单元素 */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+input[type="text"],
+input[type="datetime-local"],
+textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+input[type="text"]:focus,
+input[type="datetime-local"]:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1);
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* 颜色选择器 */
+.color-picker {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.color-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: var(--transition);
+}
+
+.color-option:hover {
+    transform: scale(1.1);
+}
+
+.color-option.selected {
+    border-color: var(--text-color);
+}
+
+/* 日计划部分 */
+.daily-plan-section {
+    margin-bottom: 1.5rem;
+}
+
+.daily-plan-section h4,
+.tasks-section h4 {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+/* 任务列表 */
+.tasks-list {
+    margin-bottom: 1rem;
+}
+
+.task-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.task-item:hover {
+    background-color: #e1e5e9;
+}
+
+.task-item.completed {
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.task-checkbox {
+    margin-right: 0.75rem;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.task-text {
+    flex: 1;
+    word-break: break-word;
+}
+
+.task-item.completed .task-text {
+    text-decoration: line-through;
+    color: var(--text-light);
+}
+
+.task-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+/* 折线图 */
+.chart-modal-content {
+    max-width: 900px;
+}
+
+.chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-md);
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 150px;
+}
+
+.control-group label {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.control-group select {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.chart-container {
+    position: relative;
+    height: 400px;
+    margin-bottom: 1.5rem;
+}
+
+.chart-summary {
+    display: flex;
+    justify-content: space-around;
+    padding: 1rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-md);
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.summary-label {
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
+.summary-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .app-main {
+        flex-direction: column;
+    }
+    
+    .goals-panel, .stats-panel {
+        width: 100%;
+        max-height: 200px;
+    }
+    
+    .calendar-section {
+        flex: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .app-header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .calendar-section {
+        padding: 1rem;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+        padding: 0.25rem;
+    }
+    
+    .day-number {
+        font-size: 0.8rem;
+    }
+    
+    .day-tasks {
+        font-size: 0.7rem;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+}
+
+/* 认证界面样式 */
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f8f9fa;
+    padding: 1rem;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.auth-header h1 {
+    color: var(--primary-color);
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.auth-header p {
+    color: var(--text-light);
+    font-size: 1.1rem;
+    font-weight: 400;
+    margin: 0;
+    letter-spacing: 0.5px;
+}
+
+.auth-form-container {
+    width: 100%;
+    max-width: 400px;
+    background-color: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 2rem;
+}
+
+.auth-title {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+}
+
+.auth-form h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--primary-color);
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.auth-form {
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+
+.btn:hover {
+    background-color: #3a5bd9;
+}
+
+.btn-block {
+    display: block;
+    width: 100%;
+}
+
+.btn-full {
+    display: block;
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    margin-top: 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+}
+
+.btn-full:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.auth-switch a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.auth-error {
+    background-color: rgba(255, 107, 107, 0.1);
+    color: var(--accent-color);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.auth-success {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* 退出链接 */
+.logout-link {
+    color: var(--text-light);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0;
+}
+
+.logout-link i {
+    margin-right: 0.25rem;
+}
+
+.logout-link:hover {
+    color: var(--text-color);
+    text-decoration: underline;
+}
+
+/* 用户设置样式 */
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    margin-left: 0.5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-light);
+    transition: var(--transition);
+}
+
+.btn-icon:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--primary-color);
+}
+
+.settings-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.settings-section h4 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
+}
+
+
+
+#app-container.theme-blue {
+    --primary-color: #007bff;
+    --secondary-color: #e3f2fd;
+    --accent-color: #17a2b8;
+}
+
+#app-container.theme-blue {
+    background-color: #f0f8ff;
+}
+
+#app-container.theme-blue .app-header {
+    background-color: #e3f2fd;
+}
+
+#app-container.theme-blue .goals-panel, 
+#app-container.theme-blue .stats-panel {
+    background-color: #e3f2fd;
+}
+
+#app-container.theme-blue .calendar-day.has-content {
+    background-color: rgba(0, 123, 255, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.has-content-past {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.has-content-past.all-tasks-completed {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #212529;
+}
+
+/* 蓝色主题的新过往日期样式 */
+#app-container.theme-blue .calendar-day.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.has-content-past-summary-only {
+    /* 不设置背景色和边框，只显示备注标记 */
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.weekend.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.weekend.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-blue .calendar-day.has-content .day-number,
+#app-container.theme-blue .calendar-day.has-content-past .day-number {
+    color: #212529;
+    font-weight: 600;
+}
+
+#app-container.theme-blue .calendar-day.has-content .day-tasks,
+#app-container.theme-blue .calendar-day.has-content-past .day-tasks {
+    color: #495057;
+}
+
+#app-container.theme-blue .stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+#app-container.theme-blue .stat-item {
+    text-align: center;
+    padding: 0.75rem;
+    background-color: rgba(0, 123, 255, 0.1);
+    border-radius: var(--radius-md);
+}
+
+#app-container.theme-blue .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+#app-container.theme-blue .stat-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+#app-container.theme-blue .streak-info {
+    text-align: center;
+    padding: 1rem;
+    background-color: rgba(23, 162, 184, 0.1);
+    border-radius: var(--radius-md);
+}
+
+#app-container.theme-blue .streak-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+#app-container.theme-blue .streak-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+#app-container.theme-green {
+    --primary-color: #28a745;
+    --secondary-color: #e8f5e9;
+    --accent-color: #20c997;
+}
+
+#app-container.theme-green {
+    background-color: #f0fff4;
+}
+
+#app-container.theme-green .app-header {
+    background-color: #e8f5e9;
+}
+
+#app-container.theme-green .goals-panel, 
+#app-container.theme-green .stats-panel {
+    background-color: #e8f5e9;
+}
+
+#app-container.theme-green .calendar-day.has-content {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.has-content-past {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.has-content-past.all-tasks-completed {
+    background-color: rgba(76, 175, 80, 0.25);
+    color: #212529;
+}
+
+/* 绿色主题的新过往日期样式 */
+#app-container.theme-green .calendar-day.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.25);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.has-content-past-summary-only {
+    /* 不设置背景色，只显示备注标记 */
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.weekend.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.25);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.weekend.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #212529;
+}
+
+#app-container.theme-green .calendar-day.has-content .day-number,
+#app-container.theme-green .calendar-day.has-content-past .day-number {
+    color: #212529;
+    font-weight: 600;
+}
+
+#app-container.theme-green .calendar-day.has-content .day-tasks,
+#app-container.theme-green .calendar-day.has-content-past .day-tasks {
+    color: #495057;
+}
+
+#app-container.theme-green .stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+#app-container.theme-green .stat-item {
+    text-align: center;
+    padding: 0.75rem;
+    background-color: rgba(40, 167, 69, 0.1);
+    border-radius: var(--radius-md);
+}
+
+#app-container.theme-green .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+#app-container.theme-green .stat-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+#app-container.theme-green .streak-info {
+    text-align: center;
+    padding: 1rem;
+    background-color: rgba(32, 201, 151, 0.1);
+    border-radius: var(--radius-md);
+}
+
+#app-container.theme-green .streak-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+#app-container.theme-green .streak-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+/* 周末样式 */
+.calendar-day.weekend {
+    background-color: rgba(248, 249, 250, 0.5);
+    color: var(--text-light);
+}
+
+/* 周末被编辑后的样式优先级更高 */
+.calendar-day.weekend.has-content {
+    background-color: rgba(74, 108, 247, 0.15);
+}
+
+.calendar-day.weekend.has-content-past {
+    background-color: rgba(255, 107, 107, 0.15);
+}
+
+.calendar-day.weekend.has-content-past-completed {
+    background-color: rgba(76, 175, 80, 0.15);
+}
+
+.calendar-day.weekend.has-content-past-incomplete {
+    background-color: rgba(255, 107, 107, 0.15);
+}
+
+.weekday-header:first-child,
+.weekday-header:last-child {
+    color: var(--text-light);
+    font-weight: 500;
+}
+
+/* 勾选框样式 */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    margin-right: 0.5rem;
+    position: relative;
+    top: 0;
+    width: auto;
+    height: auto;
+    display: inline-block;
+}
+
+/* 批量添加任务样式 */
+.date-selection-container {
+    margin-top: 1rem;
+}
+
+/* 添加任务按钮样式 */
+.add-task-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.8rem;
+    margin-top: 0.5rem;
+    background-color: rgba(var(--primary-color-rgb), 0.05);
+    border: 1px dashed var(--primary-color);
+    border-radius: var(--radius-sm);
+    color: var(--primary-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.add-task-btn:hover {
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+    border-style: solid;
+}
+
+.add-task-btn i {
+    font-size: 1rem;
+}
+
+.date-selection-method {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.date-selection-method > .radio-label {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.date-range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.date-range-inputs input {
+    flex: 1;
+}
+
+.specific-dates-container {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.mini-calendar {
+    flex: 1;
+    max-width: 300px;
+}
+
+.mini-calendar-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.mini-calendar-nav button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    min-width: auto;
+    width: 28px;
+    height: 28px;
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.mini-calendar-nav button:hover {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.mini-calendar-nav span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    color: var(--primary-color);
+    position: relative;
+    display: inline-block;
+}
+
+.mini-calendar-nav span:hover {
+    transform: translateY(-2px);
+}
+
+.mini-calendar-nav span::after {
+    display: none;
+}
+
+.mini-calendar-nav span:hover::after {
+    display: none;
+}
+
+.mini-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.mini-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+
+.mini-calendar-weekday {
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 0.25rem;
+    color: var(--text-light);
+}
+
+.mini-calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.05);
+}
+
+.mini-calendar-day:hover {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.mini-calendar-day.other-month {
+    color: var(--text-light);
+    opacity: 0.5;
+}
+
+.mini-calendar-day.selected {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.25);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.mini-calendar-day.today {
+    border: 2px solid var(--primary-color);
+}
+
+.selected-dates-display {
+    flex: 1;
+}
+
+.selected-dates-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.selected-date-chip {
+    background-color: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.selected-date-chip .remove-date {
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.weekday-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.checkbox-label {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 !important;
+    flex-shrink: 0;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+    width: auto;
+    height: auto;
+}
+
+.batch-preview {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background-color: var(--background-light);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.batch-preview h4 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.batch-preview-content {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.preview-date-group {
+    margin-bottom: 1rem;
+}
+
+.preview-date-group h5 {
+    margin: 0 0 0.5rem 0;
+    color: var(--primary-color);
+}
+
+.preview-task-list {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.preview-task-list li {
+    margin-bottom: 0.25rem;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+
+
+/* 蓝色主题下的批量添加任务样式 */
+#app-container.theme-blue .date-selection-method {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+#app-container.theme-blue .batch-preview {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+#app-container.theme-blue .mini-calendar-day {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+#app-container.theme-blue .mini-calendar-day.other-month {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* 绿色主题下的批量添加任务样式 */
+#app-container.theme-green .date-selection-method {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+#app-container.theme-green .batch-preview {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+#app-container.theme-green .mini-calendar-day {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+#app-container.theme-green .mini-calendar-day.other-month {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* 月份选择器样式 */
+.month-picker-content {
+    max-width: 400px;
+}
+
+.year-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    gap: 5px;
+}
+
+.year-selector input {
+    width: 80px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.year-selector button {
+    padding: 5px 10px;
+    font-size: 14px;
+    min-width: auto;
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.year-selector button:hover {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.month-btn {
+    padding: 10px 5px;
+    border: 1px solid var(--border-color);
+    background-color: transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 500;
+    font-size: 14px;
+    min-width: auto;
+    color: var(--text-color);
+}
+
+.month-btn:hover {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.1);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.month-btn.selected {
+    background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.2);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.month-btn.current {
+    border-color: var(--primary-color);
+    font-weight: bold;
+}

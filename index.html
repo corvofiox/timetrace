@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>目标日历 - 多目标、任务与热力图系统</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- 登录/注册界面 -->
+    <div id="auth-container" class="auth-container">
+        <div class="auth-form-container">
+            <div class="auth-header">
+                <h1><i class="ri-calendar-check-line"></i> 目标日历</h1>
+                <p>设定目标，规划每一天，成就更好的自己</p>
+            </div>
+            
+            <!-- 登录表单 -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">邮箱</label>
+                    <input type="email" id="login-email" placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">密码</label>
+                    <input type="password" id="login-password" placeholder="请输入密码">
+                </div>
+                <button type="submit" id="login-btn" class="btn btn-primary btn-full">登录</button>
+                <p class="auth-switch">
+                    没有账号？<a id="switch-to-register" href="#">注册</a>
+                </p>
+            </form>
+            
+            <!-- 注册表单 -->
+            <form id="register-form" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label for="register-username">用户名</label>
+                    <input type="text" id="register-username" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">邮箱</label>
+                    <input type="email" id="register-email" placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">密码</label>
+                    <input type="password" id="register-password" placeholder="请输入密码">
+                </div>
+                <button type="submit" id="register-btn" class="btn btn-primary btn-full">注册</button>
+                <p class="auth-switch">
+                    已有账号？<a id="switch-to-login" href="#">登录</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- 主应用界面 -->
+    <div id="app-container" class="app-container" style="display: none;">
+        <header class="app-header">
+            <h1><i class="ri-calendar-check-line"></i> 目标日历</h1>
+            <div class="header-center">
+                <div class="dropdown">
+                    <a id="functions-menu-btn" href="#" class="dropdown-toggle">
+                        <i class="ri-function-line"></i> 功能
+                    </a>
+                    <div id="functions-dropdown" class="dropdown-menu">
+                        <a id="open-batch-add-modal-btn" href="#" class="dropdown-item">
+                            <i class="ri-calendar-todo-line"></i> 批量操作
+                        </a>
+                        <a id="heatmap-toggle" href="#" class="dropdown-item">
+                            <i class="ri-line-chart-line"></i> 折线图
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-welcome" id="user-welcome" style="display: none;">
+                    <i class="ri-user-3-line"></i>
+                    <span id="username-display">用户</span>
+                    <button id="user-settings-btn" class="btn btn-icon" title="用户设置"><i class="ri-settings-3-line"></i></button>
+                </div>
+                <a id="logout-btn" href="#" class="logout-link"><i class="ri-logout-box-line"></i> 登出</a>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- 左侧目标管理面板 -->
+            <aside class="goals-panel">
+                <div class="panel-header">
+                    <h2><i class="ri-flag-line"></i> 我的目标</h2>
+                    <button id="add-goal-btn" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> 新目标</button>
+                </div>
+                <div id="goals-container" class="goals-container">
+                    <!-- 目标卡片将动态生成 -->
+                </div>
+            </aside>
+
+            <!-- 中间日历视图 -->
+            <section class="calendar-section">
+                <div class="calendar-header">
+                    <button id="prev-month" class="btn btn-secondary calendar-nav-btn"><i class="ri-arrow-left-s-line"></i></button>
+                    <h2 id="current-month-year"></h2>
+                    <button id="next-month" class="btn btn-secondary calendar-nav-btn"><i class="ri-arrow-right-s-line"></i></button>
+                    <button id="today-btn" class="btn btn-secondary">今天</button>
+                </div>
+                <div class="calendar-grid">
+                    <div class="weekday-headers">
+                        <div class="weekday-header">日</div>
+                        <div class="weekday-header">一</div>
+                        <div class="weekday-header">二</div>
+                        <div class="weekday-header">三</div>
+                        <div class="weekday-header">四</div>
+                        <div class="weekday-header">五</div>
+                        <div class="weekday-header">六</div>
+                    </div>
+                    <div id="calendar-days" class="calendar-days">
+                        <!-- 日历日期将动态生成 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右侧统计面板 -->
+            <aside class="stats-panel">
+                <div class="panel-header">
+                    <h2><i class="ri-line-chart-line"></i> 本月统计</h2>
+                </div>
+                <div class="stats-content">
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-tasks">0</div>
+                        <div class="stat-label">总任务数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="completed-tasks">0</div>
+                        <div class="stat-label">已完成</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="completion-rate">0%</div>
+                        <div class="stat-label">完成率</div>
+                    </div>
+                </div>
+                <div class="panel-header">
+                    <h2><i class="ri-fire-line"></i> 连续记录</h2>
+                </div>
+                <div class="streak-info">
+                    <div class="streak-value" id="current-streak">0</div>
+                    <div class="streak-label">当前连续天数</div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- 日格编辑模态框 -->
+    <div id="day-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-date-title"></h3>
+                <button class="close-btn" id="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="daily-plan-section">
+                    <h4><i class="ri-file-text-line"></i> 今日备注</h4>
+                    <textarea id="daily-summary" placeholder="记录今天的总体计划或备注..."></textarea>
+                </div>
+                <div class="tasks-section">
+                    <h4><i class="ri-task-line"></i> 待办任务列表</h4>
+                    <div id="tasks-list" class="tasks-list">
+                        <!-- 任务列表将动态生成 -->
+                    </div>
+                    <button id="add-task-btn" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> 添加任务</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-day-btn" class="btn btn-primary">保存</button>
+                <button id="cancel-day-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 目标编辑模态框 -->
+    <div id="goal-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="goal-modal-title">新目标</h3>
+                <button class="close-btn" id="close-goal-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="goal-name">总体目标</label>
+                    <input type="text" id="goal-name" placeholder="输入总体目标">
+                </div>
+                <div class="form-group">
+                    <label for="goal-date">目标日期</label>
+                    <input type="datetime-local" id="goal-date">
+                </div>
+                <div class="form-group">
+                    <label for="goal-color">代表色</label>
+                    <div class="color-picker">
+                        <div class="color-option" data-color="#FF6B6B" style="background-color: #FF6B6B;"></div>
+                        <div class="color-option" data-color="#4ECDC4" style="background-color: #4ECDC4;"></div>
+                        <div class="color-option" data-color="#45B7D1" style="background-color: #45B7D1;"></div>
+                        <div class="color-option" data-color="#96CEB4" style="background-color: #96CEB4;"></div>
+                        <div class="color-option" data-color="#FECA57" style="background-color: #FECA57;"></div>
+                        <div class="color-option" data-color="#DDA0DD" style="background-color: #DDA0DD;"></div>
+                    </div>
+                    <input type="hidden" id="goal-color" value="#FF6B6B">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-goal-btn" class="btn btn-primary">保存</button>
+                <button id="cancel-goal-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 折线图模态框 -->
+    <div id="heatmap-modal" class="modal">
+        <div class="modal-content chart-modal-content">
+            <div class="modal-header">
+                <h3>任务完成率趋势图</h3>
+                <button class="close-btn" id="close-heatmap-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-controls">
+                    <div class="control-group">
+                        <label for="chart-type">图表类型:</label>
+                        <select id="chart-type">
+                            <option value="line">折线图</option>
+                            <option value="bar">柱状图</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="chart-period">时间范围:</label>
+                        <select id="chart-period">
+                            <option value="month">本月</option>
+                            <option value="quarter">本季度</option>
+                            <option value="year">本年</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="chart-container" class="chart-container">
+                    <canvas id="task-chart"></canvas>
+                </div>
+                <div class="chart-summary">
+                    <div class="summary-item">
+                        <div class="summary-label">平均完成率:</div>
+                        <div class="summary-value" id="avg-completion">0%</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">最高完成率:</div>
+                        <div class="summary-value" id="max-completion">0%</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">最低完成率:</div>
+                        <div class="summary-value" id="min-completion">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务输入模态框 -->
+    <div id="task-input-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加任务</h3>
+                <button class="close-btn" id="close-task-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="task-title">任务标题</label>
+                    <input type="text" id="task-title" class="form-control" placeholder="请输入任务标题">
+                </div>
+                <div class="form-group">
+                    <label for="task-input">任务描述</label>
+                    <textarea id="task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-task-btn" class="btn btn-primary">添加</button>
+                <button id="cancel-task-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 批量任务输入模态框 -->
+    <div id="batch-task-input-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="batch-task-modal-title">添加任务</h3>
+                <button class="close-btn" id="close-batch-task-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="batch-task-title">任务标题</label>
+                    <input type="text" id="batch-task-title" class="form-control" placeholder="请输入任务标题">
+                </div>
+                <div class="form-group">
+                    <label for="batch-task-input">任务描述</label>
+                    <textarea id="batch-task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-batch-task-btn" class="btn btn-primary">保存</button>
+                <button id="cancel-batch-task-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户设置模态框 -->
+    <div id="user-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>用户设置</h3>
+                <button class="close-btn" id="close-settings-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4><i class="ri-palette-line"></i> 主题设置</h4>
+                    <div class="form-group">
+                        <label for="theme-select">选择主题</label>
+                        <select id="theme-select" class="form-control">
+                            <option value="default">默认主题</option>
+                            <option value="blue">海洋主题</option>
+                            <option value="green">森林主题</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h4><i class="ri-calendar-line"></i> 日历设置</h4>
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="show-weekends" checked>
+                            <span>显示周末</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="start-week-monday">
+                            <span>周一作为一周的开始</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h4><i class="ri-notification-3-line"></i> 通知设置</h4>
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="enable-notifications">
+                            <span>启用任务提醒</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="notification-time">默认提醒时间</label>
+                        <select id="notification-time" class="form-control">
+                            <option value="09:00">09:00</option>
+                            <option value="10:00">10:00</option>
+                            <option value="14:00">14:00</option>
+                            <option value="18:00">18:00</option>
+                            <option value="20:00">20:00</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-settings-btn" class="btn btn-primary">保存设置</button>
+                <button id="cancel-settings-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量添加任务模态框 -->
+    <div id="batch-add-task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="ri-calendar-todo-line"></i> 批量调整任务</h3>
+                <button class="close-btn" id="close-batch-add-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择日期</label>
+                    <div class="date-selection-container">
+                        <div class="date-selection-method">
+                            <label class="radio-label">
+                                <input type="radio" name="date-method" value="range" checked>
+                                <span>日期范围</span>
+                            </label>
+                            <div class="date-range-inputs">
+                                <input type="date" id="batch-start-date" class="form-control">
+                                <span>至</span>
+                                <input type="date" id="batch-end-date" class="form-control">
+                            </div>
+                        </div>
+                        
+                        <div class="date-selection-method">
+                            <label class="radio-label">
+                                <input type="radio" name="date-method" value="specific">
+                                <span>特定日期</span>
+                            </label>
+                            <div class="specific-dates-container" style="display: none;">
+                                <div class="mini-calendar" id="mini-calendar">
+                                    <!-- 迷你日历将在这里生成 -->
+                                </div>
+                                <div class="selected-dates-display">
+                                    <h4>已选择的日期：</h4>
+                                    <div id="selected-dates-list" class="selected-dates-list">
+                                        <!-- 已选择的日期将在这里显示 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="date-selection-method">
+                            <label class="radio-label">
+                                <input type="radio" name="date-method" value="weekdays">
+                                <span>工作日/周末</span>
+                            </label>
+                            <div class="weekdays-selection" style="display: none;">
+                                <div class="date-range-inputs">
+                                    <input type="date" id="weekdays-start-date" class="form-control">
+                                    <span>至</span>
+                                    <input type="date" id="weekdays-end-date" class="form-control">
+                                </div>
+                                <div class="weekday-checkboxes">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="1" checked>
+                                        <span>周一</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="2" checked>
+                                        <span>周二</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="3" checked>
+                                        <span>周三</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="4" checked>
+                                        <span>周四</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="5" checked>
+                                        <span>周五</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="6">
+                                        <span>周六</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="weekday" value="0">
+                                        <span>周日</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>任务内容</label>
+                    <div id="batch-tasks-list" class="tasks-list">
+                        <!-- 任务列表将动态生成 -->
+                    </div>
+                    <button id="batch-add-task-btn" class="add-task-btn"><i class="ri-add-line"></i> 添加任务</button>
+                    <small class="form-hint">点击"添加任务"按钮创建任务，可编辑或删除已创建的任务</small>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="batch-clear-existing">
+                        <span>清除这些日期的现有任务</span>
+                    </label>
+                </div>
+                
+                <div class="batch-preview">
+                    <h4>预览</h4>
+                    <div id="batch-preview-content">
+                        <p>请先选择目标、日期和输入任务内容</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="batch-add-save-btn" class="btn btn-primary">确认</button>
+                <button id="batch-add-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认对话框模态框 -->
+    <div id="confirm-dialog" class="modal">
+        <div class="modal-content confirm-dialog-content">
+            <div class="modal-header">
+                <h3 id="confirm-title">确认操作</h3>
+                <button class="close-btn" id="close-confirm-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">确定要执行此操作吗？</p>
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-ok-btn" class="btn btn-danger">确认</button>
+                <button id="confirm-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 月份选择器模态框 -->
+    <div id="month-picker-modal" class="modal">
+        <div class="modal-content month-picker-content">
+            <div class="modal-header">
+                <h3>选择月份</h3>
+                <button class="close-btn" id="close-month-picker-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="year-selector">
+                    <button id="year-decrement" class="btn btn-secondary"><i class="ri-arrow-left-s-line"></i></button>
+                    <input type="number" id="year-input" class="form-control" min="2020" max="2100">
+                    <button id="year-increment" class="btn btn-secondary"><i class="ri-arrow-right-s-line"></i></button>
+                </div>
+                <div class="months-grid">
+                    <!-- 月份按钮将通过JavaScript动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="month-picker-today-btn" class="btn btn-primary">本月</button>
+                <button id="month-picker-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/app.js?v=2.0"></script>
+</body>
+</html>
