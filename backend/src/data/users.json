@@ -1,16 +1,9 @@
 [
   {
-    "id": 5,
+    "id": 2,
     "username": "corvo",
     "email": "gaoxiang221@outlook.com",
-    "password": "$2a$10$Vbi446BUfw5GgL8ioVqcAeJYB2na08hPIv/hJ6.O43ko32Gv3P3qC",
-    "createdAt": "2025-12-20T06:51:08.677Z"
-  },
-  {
-    "id": 6,
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "$2a$10$/HyxhCL4TVzFMsGUKpCGO.TeJ4i91jK3Tz0AMSuvGwCdZnWz87QFm",
-    "createdAt": "2025-12-20T07:00:22.392Z"
+    "password": "$2a$10$3Dq.MNd.51aosHhKtdAi1uWtspFvzG1ohUwka91x/f1TOIoozhVhK",
+    "createdAt": "2025-12-20T14:07:38.130Z"
   }
 ]

@@ -11,7 +11,6 @@ const initServer = async () => {
   try {
     await fileDB.init();
   } catch (error) {
-    console.error('Failed to initialize database:', error);
     process.exit(1);
   }
 };
@@ -51,7 +50,6 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   await initServer();
   app.listen(PORT, () => {
-    console.log(`服务器运行在端口 ${PORT}`);
   });
 };
 

@@ -372,7 +372,7 @@ body {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background-color: var(--accent-color);
+    background-color: #ff6b6b;
 }
 
 .day-task-item.completed::before {
@@ -1258,7 +1258,7 @@ textarea {
 }
 
 #app-container.theme-green .calendar-day.has-content {
-    background-color: rgba(40, 167, 69, 0.2);
+    background-color: rgba(210, 180, 140, 0.2);
     color: #212529;
 }
 

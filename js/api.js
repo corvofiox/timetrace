@@ -85,7 +85,6 @@ const api = {
                             }
                         } catch (e) {
                             // 如果解析JSON失败，使用默认错误消息
-                            console.error('Error parsing error response:', e);
                         }
                         throw new Error(errorMessage);
                     }
@@ -118,7 +117,6 @@ const api = {
                 }
             } catch (e) {
                 // 如果解析JSON失败，使用默认错误消息
-                console.error('Error parsing error response:', e);
             }
             throw new Error(errorMessage);
         }
@@ -213,7 +211,7 @@ const api = {
                 body: JSON.stringify({ refreshToken })
             });
         } catch (error) {
-            console.error('登出请求失败:', error);
+            // 请求失败，但finally块会处理清理工作
         } finally {
             // 无论请求是否成功，都清除本地令牌
             this.removeTokens();
@@ -304,7 +302,7 @@ const api = {
                     body: JSON.stringify({ refreshToken })
                 });
             } catch (error) {
-                console.error('登出请求失败:', error);
+                // 请求失败，但finally块会处理清理工作
             } finally {
                 // 无论请求是否成功，都清除本地令牌
                 api.removeTokens();

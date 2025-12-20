@@ -1,12 +1,7 @@
 [
   {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NiwiaWF0IjoxNzY2MjE0MDM4LCJleHAiOjE3NjY4MTg4Mzh9.UMGfm88s9Nl4OwULqG5KvHwb3NaPqSMIiy188IOAag0",
-    "userId": 6,
-    "createdAt": "2025-12-20T07:00:38.453Z"
-  },
-  {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NSwiaWF0IjoxNzY2MjI1Nzg3LCJleHAiOjE3NjY4MzA1ODd9.p8XjxcK5C5sUKOrPHCevIhD-0x7k8QFvGIgmlM-Vaz0",
-    "userId": 5,
-    "createdAt": "2025-12-20T10:16:27.317Z"
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzY2MjM5NjU4LCJleHAiOjE3NjY4NDQ0NTh9.Asw2eaZ72_l3TyrIeehxLORrO7Ch4trInESv27VuvVY",
+    "userId": 2,
+    "createdAt": "2025-12-20T14:07:38.130Z"
   }
 ]

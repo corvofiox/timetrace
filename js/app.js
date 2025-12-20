@@ -232,11 +232,6 @@ const utils = {
         return { expired: false, text };
     },
     
-    // 生成唯一ID
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    },
-    
     // 计算完成率
     calculateCompletionRate(tasks) {
         if (!tasks || tasks.length === 0) return 0;
@@ -635,7 +630,6 @@ const goals = {
                 }
             })
             .catch(error => {
-                console.error('添加目标失败:', error);
                 alert('添加失败: ' + (error.message || '未知错误'));
             });
     },
@@ -652,7 +646,6 @@ const goals = {
                 }
             })
             .catch(error => {
-                console.error('更新目标失败:', error);
                 alert('更新失败: ' + (error.message || '未知错误'));
             });
     },
@@ -674,7 +667,6 @@ const goals = {
                 }
             })
             .catch(error => {
-                console.error('删除目标失败:', error);
                 alert('删除失败: ' + (error.message || '未知错误'));
             });
     }
@@ -1519,7 +1511,8 @@ const userSettings = {
                 this.applyTheme(appData.settings.theme);
                 // 用户设置已加载，键名:
             } catch (error) {
-                console.error('加载用户设置失败:', error);
+                // 用户设置加载失败，使用默认设置
+                console.warn('加载用户设置失败:', error);
             }
         } else {
             // 没有找到保存的用户设置，键名:
@@ -1606,7 +1599,6 @@ function checkAuthStatus() {
                 showApp();
             })
             .catch(error => {
-                console.error('Token验证失败:', error);
                 localStorage.removeItem('token');
                 showAuth();
             });
@@ -1664,7 +1656,6 @@ function loadData() {
             appData.goals = response.data || [];
         })
         .catch(error => {
-            console.error('加载目标失败:', error);
             appData.goals = []; // 确保goals始终是数组
         });
     
@@ -1685,7 +1676,6 @@ function loadData() {
             });
         })
         .catch(error => {
-            console.error('加载日计划失败:', error);
             appData.dailyPlans = {}; // 确保dailyPlans始终是对象
         });
     
@@ -1916,7 +1906,6 @@ function handleLogin(e) {
             showApp();
         })
         .catch(error => {
-            console.error('登录失败:', error);
             alert('登录失败: ' + (error.message || '未知错误'));
         });
 }
@@ -1949,7 +1938,6 @@ function handleRegister(e) {
             showApp();
         })
         .catch(error => {
-            console.error('注册失败:', error);
             alert('注册失败: ' + (error.message || '未知错误'));
         });
 }
@@ -2169,7 +2157,9 @@ const batchAddTask = {
         
         this.tasks.push(task);
         this.renderTasks();
-        this.updatePreview().catch(err => console.error('更新预览失败:', err));
+        this.updatePreview().catch(err => {
+            // 预览更新失败不影响主流程，忽略错误
+        });
     },
     
     // 编辑任务
@@ -2187,7 +2177,9 @@ const batchAddTask = {
         
         this.tasks = this.tasks.filter(t => t.id !== id);
         this.renderTasks();
-        this.updatePreview().catch(err => console.error('更新预览失败:', err));
+        this.updatePreview().catch(err => {
+            // 预览更新失败不影响主流程，忽略错误
+        });
     },
     toggleDateMethod(method) {
         // 隐藏所有日期选择容器
@@ -2213,7 +2205,9 @@ const batchAddTask = {
                 break;
         }
         
-        this.updatePreview().catch(err => console.error('更新预览失败:', err));
+        this.updatePreview().catch(err => {
+            // 预览更新失败不影响主流程，忽略错误
+        });
     },
     
     // 渲染迷你日历
@@ -2321,7 +2315,9 @@ const batchAddTask = {
         // 更新UI
         this.renderMiniCalendar();
         this.updateSelectedDatesList();
-        this.updatePreview().catch(err => console.error('更新预览失败:', err));
+        this.updatePreview().catch(err => {
+            // 预览更新失败不影响主流程，忽略错误
+        });
     },
     
     // 更新已选择日期列表
@@ -2457,7 +2453,8 @@ const batchAddTask = {
                                 });
                             }
                         } catch (error) {
-                            console.error(`获取日期 ${date} 的任务失败:`, error);
+                            // 批量任务处理失败，跳过此任务
+                            console.warn('处理任务时出错:', error);
                         }
                     });
                     
@@ -2640,7 +2637,6 @@ const batchAddTask = {
             alert(successMessage);
             
         } catch (error) {
-            console.error('批量添加任务失败:', error);
             alert('批量添加任务失败: ' + (error.message || '未知错误'));
         } finally {
             // 恢复按钮状态
