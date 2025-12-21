@@ -76,23 +76,53 @@ const api = {
                     
                     if (!retryResponse.ok) {
                         // 尝试解析错误响应，但如果响应体为空则使用默认错误消息
-                        let errorMessage = '请求失败';
-                        try {
-                            const contentType = retryResponse.headers.get('content-type');
-                            if (contentType && contentType.includes('application/json')) {
-                                const error = await retryResponse.json();
-                                errorMessage = error.message || errorMessage;
-                            }
-                        } catch (e) {
-                            // 如果解析JSON失败，使用默认错误消息
+            let errorMessage = '请求失败';
+            try {
+                const contentType = retryResponse.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const responseText = await retryResponse.text();
+                    // 处理可能的非标准JSON响应
+                    try {
+                        // 尝试直接解析
+                        const error = JSON.parse(responseText);
+                        errorMessage = error.message || errorMessage;
+                    } catch (parseError) {
+                        // 如果解析失败，尝试清理可能的额外字符
+                        const trimmedText = responseText.trim();
+                        // 查找最后一个 } 的位置
+                        const lastBraceIndex = trimmedText.lastIndexOf('}');
+                        if (lastBraceIndex !== -1) {
+                            const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
+                            const error = JSON.parse(cleanedText);
+                            errorMessage = error.message || errorMessage;
                         }
+                    }
+                }
+            } catch (e) {
+                // 如果解析JSON失败，使用默认错误消息
+            }
                         throw new Error(errorMessage);
                     }
                     
                     // 尝试解析成功响应，但如果响应体为空则返回null
                     const contentType = retryResponse.headers.get('content-type');
                     if (contentType && contentType.includes('application/json')) {
-                        return await retryResponse.json();
+                        const responseText = await retryResponse.text();
+                        // 处理可能的非标准JSON响应
+                        try {
+                            // 尝试直接解析
+                            return JSON.parse(responseText);
+                        } catch (error) {
+                            // 如果解析失败，尝试清理可能的额外字符
+                            const trimmedText = responseText.trim();
+                            // 查找最后一个 } 的位置
+                            const lastBraceIndex = trimmedText.lastIndexOf('}');
+                            if (lastBraceIndex !== -1) {
+                                const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
+                                return JSON.parse(cleanedText);
+                            }
+                            throw new Error('Invalid JSON response: ' + error.message);
+                        }
                     } else {
                         return null;
                     }
@@ -124,7 +154,22 @@ const api = {
         // 尝试解析成功响应，但如果响应体为空则返回null
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
-            return await response.json();
+            const responseText = await response.text();
+            // 处理可能的非标准JSON响应
+            try {
+                // 尝试直接解析
+                return JSON.parse(responseText);
+            } catch (error) {
+                // 如果解析失败，尝试清理可能的额外字符
+                const trimmedText = responseText.trim();
+                // 查找最后一个 } 的位置
+                const lastBraceIndex = trimmedText.lastIndexOf('}');
+                if (lastBraceIndex !== -1) {
+                    const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
+                    return JSON.parse(cleanedText);
+                }
+                throw new Error('Invalid JSON response: ' + error.message);
+            }
         } else {
             return null;
         }

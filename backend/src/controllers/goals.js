@@ -4,7 +4,7 @@ const {
   createGoal,
   updateGoal,
   deleteGoal
-} = require('../config/database');
+} = require('../models/database');
 
 // @desc    Get all goals
 // @route   GET /api/goals

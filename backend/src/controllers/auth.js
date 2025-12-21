@@ -8,7 +8,7 @@ const {
   findRefreshToken,
   deleteRefreshToken,
   deleteAllUserRefreshTokens
-} = require('../config/database');
+} = require('../models/database');
 
 // @desc    Register user
 // @route   POST /api/auth/register

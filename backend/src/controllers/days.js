@@ -4,7 +4,7 @@ const {
   getDayByDate,
   createOrUpdateDay,
   deleteDay
-} = require('../config/database');
+} = require('../models/database');
 
 // @desc    Get all days
 // @route   GET /api/days

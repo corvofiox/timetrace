@@ -1,7 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const fileDB = require('./config/fileDB');
+const fileDB = require('./models/fileDB');
 
 // Load environment variables
 dotenv.config();
@@ -50,7 +50,7 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   await initServer();
   app.listen(PORT, () => {
-    // Server running on port ${PORT}
+    console.log(`Server running on port ${PORT}`);
   });
 };
 
