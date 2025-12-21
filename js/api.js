@@ -235,6 +235,10 @@ const api = {
         return await this.goals.delete(id);
     },
     
+    async updateGoalOrder(goalIds) {
+        return await this.goals.updateOrder(goalIds);
+    },
+    
     // 日计划相关API
     async getDays(startDate, endDate) {
         return await this.days.getAll(startDate, endDate);
@@ -246,6 +250,11 @@ const api = {
     
     async createOrUpdateDay(dayData) {
         return await this.days.createOrUpdate(dayData);
+    },
+    
+    // 搜索备注
+    async searchNotes(searchParams) {
+        return await this.days.searchNotes(searchParams);
     },
     
     // 嵌套对象保持兼容性
@@ -343,6 +352,14 @@ const api = {
             return await api.request(`/goals/${id}`, {
                 method: 'DELETE'
             });
+        },
+        
+        // 更新目标顺序
+        async updateOrder(goalIds) {
+            return await api.request('/goals/reorder', {
+                method: 'PUT',
+                body: JSON.stringify({ goalIds })
+            });
         }
     },
     
@@ -369,5 +386,13 @@ const api = {
                 body: JSON.stringify(dayData)
             });
         },
+        
+        // 搜索备注
+        async searchNotes(searchParams) {
+            const { keyword } = searchParams;
+            const query = `?keyword=${encodeURIComponent(keyword)}`;
+            
+            return await api.request(`/days/search${query}`);
+        }
     }
 };

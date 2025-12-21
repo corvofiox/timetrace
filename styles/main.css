@@ -326,10 +326,6 @@ body {
     background-color: rgba(255, 107, 107, 0.15);
 }
 
-.calendar-day.has-content-past.all-tasks-completed {
-    background-color: rgba(76, 175, 80, 0.15);
-}
-
 /* 新的过往日期样式 */
 .calendar-day.has-content-past-completed {
     background-color: rgba(76, 175, 80, 0.15);
@@ -337,10 +333,6 @@ body {
 
 .calendar-day.has-content-past-incomplete {
     background-color: rgba(255, 107, 107, 0.15);
-}
-
-.calendar-day.has-content-past-summary-only {
-    /* 不设置背景色和边框，只显示备注标记 */
 }
 
 .day-number {
@@ -406,10 +398,37 @@ body {
     box-shadow: var(--shadow-sm);
     border-left: 4px solid var(--primary-color);
     transition: var(--transition);
+    cursor: move;
+    position: relative;
 }
 
 .goal-card:hover {
     box-shadow: var(--shadow-md);
+}
+
+.goal-card.dragging {
+    opacity: 0.5;
+    transform: scale(1.02) rotate(2deg);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    transition: none;
+}
+
+.goal-card.drag-over {
+    border-top: 3px solid var(--primary-color);
+    transform: translateY(2px);
+}
+
+/* 拖拽加载指示器 */
+.loading-indicator {
+    text-align: center;
+    padding: 1rem;
+    color: var(--primary-color);
+    font-weight: 500;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: var(--radius-md);
+    margin: 0.5rem 0;
+    box-shadow: var(--shadow-sm);
 }
 
 .goal-header {
@@ -513,6 +532,15 @@ body {
 .btn-success {
     background-color: #28a745;
     color: white;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
 }
 
 .btn-secondary {
@@ -1122,8 +1150,6 @@ textarea {
     box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
 }
 
-
-
 #app-container.theme-blue {
     --primary-color: #007bff;
     --secondary-color: #e3f2fd;
@@ -1150,11 +1176,6 @@ textarea {
 
 #app-container.theme-blue .calendar-day.has-content-past {
     background-color: rgba(255, 107, 107, 0.2);
-    color: #212529;
-}
-
-#app-container.theme-blue .calendar-day.has-content-past.all-tasks-completed {
-    background-color: rgba(76, 175, 80, 0.2);
     color: #212529;
 }
 
@@ -1267,11 +1288,6 @@ textarea {
     color: #212529;
 }
 
-#app-container.theme-green .calendar-day.has-content-past.all-tasks-completed {
-    background-color: rgba(76, 175, 80, 0.25);
-    color: #212529;
-}
-
 /* 绿色主题的新过往日期样式 */
 #app-container.theme-green .calendar-day.has-content-past-completed {
     background-color: rgba(76, 175, 80, 0.25);
@@ -1373,12 +1389,6 @@ textarea {
 
 .calendar-day.weekend.has-content-past-incomplete {
     background-color: rgba(255, 107, 107, 0.15);
-}
-
-.weekday-header:first-child,
-.weekday-header:last-child {
-    color: var(--text-light);
-    font-weight: 500;
 }
 
 /* 勾选框样式 */
@@ -1673,8 +1683,6 @@ textarea {
     color: var(--text-light);
 }
 
-
-
 /* 蓝色主题下的批量添加任务样式 */
 #app-container.theme-blue .date-selection-method {
     background-color: rgba(255, 255, 255, 0.05);
@@ -1783,4 +1791,76 @@ textarea {
 .month-btn.current {
     border-color: var(--primary-color);
     font-weight: bold;
+}
+
+.search-result-content {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    line-height: 1.4;
+}
+
+.search-result-highlight {
+    background-color: #ffeb3b;
+    font-weight: 600;
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+/* 备注搜索功能样式 */
+.search-section {
+    margin-bottom: 1.5rem;
+}
+
+.search-results-section {
+    margin-top: 1.5rem;
+}
+
+.search-results-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+}
+
+.search-result-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.search-result-item:hover {
+    background-color: #e1e5e9;
+}
+
+.search-result-date {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0.25rem;
+}
+
+.search-result-content {
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.search-result-highlight {
+    background-color: rgba(255, 193, 7, 0.3);
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+.no-results {
+    text-align: center;
+    color: var(--text-light);
+    padding: 1.5rem;
+}
+
+.search-loading {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-light);
 }

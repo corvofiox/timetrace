@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>目标日历 - 多目标、任务与热力图系统</title>
+    <title>目标日历 - 自我管理与统计系统</title>
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -67,6 +67,9 @@
                     <div id="functions-dropdown" class="dropdown-menu">
                         <a id="open-batch-add-modal-btn" href="#" class="dropdown-item">
                             <i class="ri-calendar-todo-line"></i> 批量操作
+                        </a>
+                        <a id="open-notes-search-btn" href="#" class="dropdown-item">
+                            <i class="ri-search-line"></i> 备注搜索
                         </a>
                         <a id="heatmap-toggle" href="#" class="dropdown-item">
                             <i class="ri-line-chart-line"></i> 折线图
@@ -370,6 +373,33 @@
         </div>
     </div>
 
+    <!-- 备注搜索模态框 -->
+    <div id="notes-search-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="ri-search-line"></i> 备注搜索</h3>
+                <button class="close-btn" id="close-notes-search-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-section">
+                        <div class="form-group">
+                            <label for="notes-search-input">搜索关键字</label>
+                            <input type="text" id="notes-search-input" class="form-control" placeholder="输入关键字搜索历史备注...">
+                        </div>
+                    </div>
+                <div class="search-results-section">
+                    <h4>搜索结果</h4>
+                    <div id="search-results-container" class="search-results-container">
+                        <div class="no-results">请输入关键字开始搜索</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="close-notes-search-footer-btn" class="btn btn-secondary">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 批量添加任务模态框 -->
     <div id="batch-add-task-modal" class="modal">
         <div class="modal-content">
@@ -529,6 +559,6 @@
     </div>
 
     <script src="js/api.js"></script>
-    <script src="js/app.js?v=2.0"></script>
+    <script src="js/app.js?v=2.4"></script>
 </body>
 </html>

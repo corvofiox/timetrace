@@ -217,3 +217,66 @@ exports.deleteDay = async (req, res) => {
     });
   }
 };
+
+// @desc    Search notes in days
+// @route   GET /api/days/search
+// @access  Private
+exports.searchNotes = async (req, res) => {
+  try {
+    const { keyword } = req.query;
+    
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Keyword is required'
+      });
+    }
+    
+    // 获取所有日计划
+    let days = await getAllDays();
+    
+    // 只获取当前用户的日计划
+    days = days.filter(day => day.userId === req.user.id);
+    
+    const results = [];
+    
+    // 将关键字拆分成单个词，去除空格和空字符串
+    const keywords = keyword.toLowerCase()
+      .split(/\s+/)  // 按空格拆分
+      .filter(word => word.length > 0);  // 过滤掉空字符串
+    
+    // 搜索每日备注
+    days.forEach(day => {
+      if (day.summary) {
+        const summaryLower = day.summary.toLowerCase();
+        
+        // 检查备注是否包含所有关键字
+        const allKeywordsMatch = keywords.every(keyword => 
+          summaryLower.includes(keyword)
+        );
+        
+        if (allKeywordsMatch) {
+          results.push({
+            date: day.date,
+            content: day.summary,
+            type: 'summary'
+          });
+        }
+      }
+    });
+    
+    // 按日期排序（最新的在前）
+    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    res.status(200).json({
+      success: true,
+      count: results.length,
+      data: results
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};

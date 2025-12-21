@@ -5,13 +5,17 @@ const {
   getGoal,
   createGoal,
   updateGoal,
-  deleteGoal
+  deleteGoal,
+  reorderGoals
 } = require('../controllers/goals');
 const { protect } = require('../middleware/auth');
 
 router.route('/')
   .get(protect, getGoals)
   .post(protect, createGoal);
+
+router.route('/reorder')
+  .put(protect, reorderGoals);
 
 router.route('/:id')
   .get(protect, getGoal)

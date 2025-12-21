@@ -112,9 +112,15 @@ const goals = {
     const idStr = id.toString();
     const index = allGoals.findIndex(goal => goal.id.toString() === idStr);
     if (index !== -1) {
-      allGoals[index] = { ...allGoals[index], ...goalData };
+      // 确保只更新提供的字段，保留其他字段不变
+      const updatedGoal = {
+        ...allGoals[index],
+        ...goalData,
+        updatedAt: new Date()
+      };
+      allGoals[index] = updatedGoal;
       await writeJsonFile(GOALS_FILE, allGoals);
-      return allGoals[index];
+      return updatedGoal;
     }
     return null;
   },

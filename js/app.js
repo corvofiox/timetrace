@@ -23,6 +23,236 @@ const appData = {
     }
 };
 
+// 中间层队列系统
+const reorderQueue = {
+    operations: [],
+    isProcessing: false,
+    listeners: [], // 监听器列表
+    
+    // 添加监听器
+    addListener(callback) {
+        this.listeners.push(callback);
+    },
+    
+    // 移除监听器
+    removeListener(callback) {
+        const index = this.listeners.indexOf(callback);
+        if (index > -1) {
+            this.listeners.splice(index, 1);
+        }
+    },
+    
+    // 通知监听器
+    notifyListeners(event, data) {
+        this.listeners.forEach(callback => {
+            try {
+                callback(event, data);
+            } catch (error) {
+                // 监听器执行失败: error
+            }
+        });
+    },
+    
+    // 添加排序操作到队列
+    addOperation(operation) {
+        this.operations.push({
+            ...operation,
+            timestamp: Date.now(),
+            id: this.generateId()
+        });
+        
+        // 保存队列到本地存储
+        this.saveQueue();
+        
+        // 通知监听器有新操作添加
+        this.notifyListeners('operationAdded', { operation });
+        
+        // 如果没有正在处理的操作，开始处理队列
+        if (!this.isProcessing) {
+            this.processQueue();
+        }
+    },
+    
+    // 生成唯一ID
+    generateId() {
+        return `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    },
+    
+    // 处理队列中的操作
+    async processQueue() {
+        if (this.operations.length === 0) {
+            this.isProcessing = false;
+            this.notifyListeners('queueEmpty', {});
+            return;
+        }
+        
+        this.isProcessing = true;
+        this.notifyListeners('processingStarted', {});
+        this.showIndicator();
+        
+        while (this.operations.length > 0) {
+            const operation = this.operations.shift();
+            
+            try {
+                await this.executeOperation(operation);
+                this.notifyListeners('operationCompleted', { operation });
+            } catch (error) {
+                this.notifyListeners('operationFailed', { operation, error });
+                
+                // 如果是网络错误，将操作重新加入队列末尾进行重试
+                if (error.message && error.message.includes('network')) {
+                    this.operations.push(operation);
+                    
+                    // 等待一段时间后重试
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+            
+            // 保存更新后的队列
+            this.saveQueue();
+        }
+        
+        this.isProcessing = false;
+        this.notifyListeners('processingCompleted', {});
+        this.hideIndicator();
+    },
+    
+    // 执行单个排序操作
+    async executeOperation(operation) {
+        switch (operation.type) {
+            case 'reorder-goals':
+                const response = await api.updateGoalOrder(operation.data.goalIds);
+                
+                // 使用后端返回的最新数据更新本地数据
+                if (response && response.data) {
+                    appData.goals = response.data;
+                }
+                break;
+            default:
+                // 未知的操作类型
+        }
+    },
+    
+    // 保存队列到本地存储
+    saveQueue() {
+        try {
+            localStorage.setItem('reorderQueue', JSON.stringify(this.operations));
+        } catch (error) {
+            // 保存队列到本地存储失败
+        }
+    },
+    
+    // 从本地存储加载队列
+    loadQueue() {
+        try {
+            const savedQueue = localStorage.getItem('reorderQueue');
+            if (savedQueue) {
+                this.operations = JSON.parse(savedQueue);
+                
+                // 如果有待处理的操作，恢复处理
+                if (this.operations.length > 0 && !this.isProcessing) {
+                    this.processQueue();
+                }
+                
+                // 通知监听器队列已加载
+                this.notifyListeners('queueLoaded', { operations: this.operations });
+            }
+        } catch (error) {
+            this.operations = [];
+        }
+    },
+    
+    // 显示队列处理指示器
+    showIndicator() {
+        // 移除已存在的指示器
+        this.hideIndicator();
+        
+        const indicator = document.createElement('div');
+        indicator.id = 'queue-indicator';
+        indicator.className = 'queue-indicator';
+        indicator.innerHTML = `
+            <div class="queue-spinner"></div>
+            <div class="queue-text">正在同步排序...</div>
+        `;
+        
+        // 添加样式
+        const style = document.createElement('style');
+        style.id = 'queue-indicator-style';
+        style.textContent = `
+            .queue-indicator {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background-color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                display: flex;
+                align-items: center;
+                z-index: 1000;
+                font-size: 14px;
+            }
+            .queue-spinner {
+                width: 16px;
+                height: 16px;
+                border: 2px solid #f3f3f3;
+                border-top: 2px solid var(--primary-color);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-right: 8px;
+            }
+            .queue-text {
+                color: #333;
+                font-weight: 500;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        
+        document.head.appendChild(style);
+        document.body.appendChild(indicator);
+    },
+    
+    // 隐藏队列处理指示器
+    hideIndicator() {
+        const indicator = document.getElementById('queue-indicator');
+        const style = document.getElementById('queue-indicator-style');
+        
+        if (indicator) {
+            indicator.parentNode.removeChild(indicator);
+        }
+        
+        if (style) {
+            style.parentNode.removeChild(style);
+        }
+    },
+    
+    // 清空队列
+    clearQueue() {
+        this.operations = [];
+        this.saveQueue();
+        this.hideIndicator();
+    }
+};
+
+// 拖拽辅助函数
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.goal-card:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
 // DOM元素引用
 const elements = {
     // 认证相关元素
@@ -164,7 +394,15 @@ const elements = {
     yearIncrement: document.getElementById('year-increment'),
     monthsGrid: document.querySelector('.months-grid'),
     monthPickerTodayBtn: document.getElementById('month-picker-today-btn'),
-    monthPickerCancelBtn: document.getElementById('month-picker-cancel-btn')
+    monthPickerCancelBtn: document.getElementById('month-picker-cancel-btn'),
+    
+    // 备注搜索元素
+        openNotesSearchBtn: document.getElementById('open-notes-search-btn'),
+        notesSearchModal: document.getElementById('notes-search-modal'),
+        closeNotesSearchBtn: document.getElementById('close-notes-search-btn'),
+        closeNotesSearchFooterBtn: document.getElementById('close-notes-search-footer-btn'),
+        notesSearchInput: document.getElementById('notes-search-input'),
+        searchResultsContainer: document.getElementById('search-results-container')
 };
 
 // 工具函数
@@ -562,7 +800,21 @@ const goals = {
             return;
         }
         
-        appData.goals.forEach(goal => {
+        // 按order字段排序，如果没有order字段则按创建时间排序
+        const sortedGoals = [...appData.goals].sort((a, b) => {
+            // 确保order字段是数字类型
+            const aOrder = a.order !== undefined ? parseInt(a.order) : 999999;
+            const bOrder = b.order !== undefined ? parseInt(b.order) : 999999;
+            
+            if (aOrder !== bOrder) {
+                return aOrder - bOrder;
+            }
+            
+            // 如果order相同或都没有order，按创建时间排序
+            return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+        
+        sortedGoals.forEach(goal => {
             const goalCard = goals.createGoalCard(goal);
             elements.goalsContainer.appendChild(goalCard);
         });
@@ -571,13 +823,23 @@ const goals = {
         calendar.render();
     },
     
+    // 强制重新渲染并重新绑定事件
+    forceRender() {
+        this.render();
+        // 重新启动倒计时以确保事件绑定正确
+        countdown.stopTimer();
+        countdown.startTimer();
+    },
+    
     // 创建目标卡片
     createGoalCard(goal) {
         const goalCard = document.createElement('div');
         goalCard.classList.add('goal-card');
         goalCard.style.borderLeftColor = goal.color;
+        goalCard.draggable = true;
+        goalCard.dataset.goalId = goal.id;
         
-        const countdown = utils.calculateCountdown(goal.date);
+        const countdownResult = utils.calculateCountdown(goal.date);
         
         goalCard.innerHTML = `
             <div class="goal-header">
@@ -592,8 +854,8 @@ const goals = {
                 </div>
             </div>
             <div class="goal-date">目标日期: ${new Date(goal.date).toLocaleString('zh-CN')}</div>
-            <div class="goal-countdown ${countdown.expired ? 'expired' : ''}">
-                ${countdown.expired ? '已过期' : '剩余: ' + countdown.text}
+            <div class="goal-countdown ${countdownResult.expired ? 'expired' : ''}">
+                ${countdownResult.expired ? '已过期' : '剩余: ' + countdownResult.text}
             </div>
         `;
         
@@ -613,16 +875,99 @@ const goals = {
             );
         });
         
+        // 添加拖拽事件 - 使用更可靠的实现
+        goalCard.addEventListener('dragstart', (e) => {
+            // 设置拖拽数据
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', goalCard.outerHTML);
+            e.dataTransfer.setData('text/plain', goal.id);
+            
+            // 添加拖拽样式
+            goalCard.classList.add('dragging');
+            
+            // 暂停倒计时，避免拖拽时重新渲染
+            countdown.pauseTimer();
+            
+            // 存储拖拽开始时的位置信息
+            goalCard.dataset.dragStartY = e.clientY.toString();
+        });
+        
+        goalCard.addEventListener('dragend', () => {
+            // 移除拖拽样式
+            goalCard.classList.remove('dragging');
+            
+            // 清理所有拖拽相关的样式
+            document.querySelectorAll('.goal-card').forEach(card => {
+                card.classList.remove('drag-over');
+                card.style.transform = '';
+            });
+            
+            // 恢复倒计时
+            countdown.resumeTimer();
+        });
+        
+        goalCard.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const draggingCard = document.querySelector('.dragging');
+            if (!draggingCard || draggingCard === goalCard) return;
+            
+            // 清理所有卡片的悬停效果
+            document.querySelectorAll('.goal-card').forEach(card => {
+                card.classList.remove('drag-over');
+            });
+            
+            // 添加当前悬停效果
+            goalCard.classList.add('drag-over');
+            
+            // 计算拖拽位置
+            const rect = goalCard.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const container = elements.goalsContainer;
+            
+            // 根据鼠标位置决定插入位置
+            if (e.clientY < midpoint) {
+                // 插入到当前卡片之前
+                if (goalCard.previousElementSibling !== draggingCard) {
+                    container.insertBefore(draggingCard, goalCard);
+                }
+            } else {
+                // 插入到当前卡片之后
+                if (goalCard.nextElementSibling !== draggingCard) {
+                    container.insertBefore(draggingCard, goalCard.nextElementSibling);
+                }
+            }
+        });
+        
+        goalCard.addEventListener('dragleave', () => {
+            goalCard.classList.remove('drag-over');
+        });
+        
+        goalCard.addEventListener('drop', (e) => {
+            e.preventDefault();
+            goalCard.classList.remove('drag-over');
+            
+            // 更新目标顺序
+            goals.updateGoalOrder();
+        });
+        
         return goalCard;
     },
     
     // 添加目标
     add(goalData) {
-        api.createGoal(goalData)
+        // 设置新目标的order为当前目标的数量
+        const newGoalData = {
+            ...goalData,
+            order: appData.goals.length
+        };
+        
+        api.createGoal(newGoalData)
             .then(response => {
                 const newGoal = response.data;
                 appData.goals.push(newGoal);
-                goals.render();
+                goals.forceRender();
                 
                 // 启动倒计时更新
                 if (!countdownTimer) {
@@ -642,7 +987,7 @@ const goals = {
                 const index = appData.goals.findIndex(goal => goal.id === goalId);
                 if (index !== -1) {
                     appData.goals[index] = updatedGoal;
-                    goals.render();
+                    goals.forceRender();
                 }
             })
             .catch(error => {
@@ -657,18 +1002,55 @@ const goals = {
                 // 确认删除成功后再从本地数组中移除
                 if (response && response.success) {
                     appData.goals = appData.goals.filter(goal => goal.id !== goalId);
-                    goals.render();
+                    goals.forceRender();
                     
                     // 如果没有目标了，停止倒计时更新
-                    if (appData.goals.length === 0 && countdownTimer) {
-                        clearInterval(countdownTimer);
-                        countdownTimer = null;
+                    if (appData.goals.length === 0) {
+                        countdown.stopTimer();
                     }
                 }
             })
             .catch(error => {
                 alert('删除失败: ' + (error.message || '未知错误'));
             });
+    },
+    
+    // 更新目标顺序 - 使用队列系统
+    updateGoalOrder() {
+        const goalCards = document.querySelectorAll('.goal-card');
+        const newOrder = Array.from(goalCards).map(card => card.dataset.goalId);
+        
+        // 更新目标顺序: newOrder
+        
+        // 检查顺序是否真的发生了变化
+        const currentOrder = appData.goals.map(goal => goal.id.toString());
+        const orderChanged = JSON.stringify(currentOrder) !== JSON.stringify(newOrder);
+        
+        if (!orderChanged) {
+            // 顺序未变化，跳过更新
+            countdown.resumeTimer();
+            return;
+        }
+        
+        // 立即更新本地数据，提供即时反馈
+        const updatedGoals = newOrder.map((goalId, index) => {
+            const goal = appData.goals.find(g => g.id.toString() === goalId);
+            if (goal) {
+                return { ...goal, order: index };
+            }
+            return goal;
+        }).filter(Boolean);
+        
+        appData.goals = updatedGoals;
+        
+        // 添加排序操作到队列
+        reorderQueue.addOperation({
+            type: 'reorder-goals',
+            data: { goalIds: newOrder }
+        });
+        
+        // 恢复倒计时
+        countdown.resumeTimer();
     }
 };
 
@@ -871,14 +1253,19 @@ const dayModal = {
             }
         });
         
-        // 3. 应用添加
+        // 3. 应用添加，同时检查是否有对应的编辑
         appData.pendingTaskChanges.added.forEach(addition => {
             if (addition.dateStr === dateStr) {
+                // 检查是否有对应的编辑更改
+                const correspondingEdit = appData.pendingTaskChanges.edited.find(
+                    edit => edit.taskId === addition.id
+                );
+                
                 dailyPlan.tasks.push({
                     id: addition.id,
                     title: addition.title,
                     description: addition.description,
-                    completed: addition.completed
+                    completed: correspondingEdit ? correspondingEdit.completed : addition.completed
                 });
             }
         });
@@ -1120,11 +1507,16 @@ const taskInputModal = {
         // 应用待处理的添加
         appData.pendingTaskChanges.added.forEach(addition => {
             if (addition.dateStr === dateStr) {
+                // 检查是否有对应的编辑更改
+                const correspondingEdit = appData.pendingTaskChanges.edited.find(
+                    edit => edit.taskId === addition.id
+                );
+                
                 tasks.push({
                     id: addition.id,
                     title: addition.title,
                     description: addition.description,
-                    completed: addition.completed
+                    completed: correspondingEdit ? correspondingEdit.completed : addition.completed
                 });
             }
         });
@@ -1512,7 +1904,7 @@ const userSettings = {
                 // 用户设置已加载，键名:
             } catch (error) {
                 // 用户设置加载失败，使用默认设置
-                console.warn('加载用户设置失败:', error);
+                // 加载用户设置失败: error
             }
         } else {
             // 没有找到保存的用户设置，键名:
@@ -1566,8 +1958,52 @@ const countdown = {
         if (countdownTimer) return;
         
         countdownTimer = setInterval(() => {
-            goals.render();
+            // 只更新倒计时文本，不重新渲染整个目标列表
+            this.updateCountdownText();
         }, 1000);
+    },
+    
+    // 更新倒计时文本，不重新渲染整个列表
+    updateCountdownText() {
+        const goalCards = document.querySelectorAll('.goal-card');
+        goalCards.forEach(card => {
+            const goalId = card.dataset.goalId;
+            const goal = appData.goals.find(g => g.id.toString() === goalId);
+            
+            if (goal) {
+                const countdownResult = utils.calculateCountdown(goal.date);
+                const countdownElement = card.querySelector('.goal-countdown');
+                if (countdownElement) {
+                    countdownElement.className = `goal-countdown ${countdownResult.expired ? 'expired' : ''}`;
+                    countdownElement.textContent = countdownResult.expired ? '已过期' : '剩余: ' + countdownResult.text;
+                }
+            }
+        });
+    },
+    
+    // 暂停倒计时更新
+    pauseTimer() {
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+    },
+    
+    // 恢复倒计时更新
+    resumeTimer() {
+        if (!countdownTimer && appData.goals.length > 0) {
+            countdownTimer = setInterval(() => {
+                this.updateCountdownText();
+            }, 1000);
+        }
+    },
+    
+    // 停止倒计时更新
+    stopTimer() {
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
     }
 };
 
@@ -1635,15 +2071,44 @@ function showApp() {
     // 重新加载用户设置
     userSettings.load();
     
+    // 检查是否有队列操作正在处理
+    const hasQueueOperations = reorderQueue.operations.length > 0 || reorderQueue.isProcessing;
+    
     // 加载数据
     loadData().then(() => {
-        // 渲染界面
-        calendar.render();
-        goals.render();
-        
-        // 启动倒计时更新
-        if (appData.goals.length > 0) {
-            countdown.startTimer();
+        // 如果有队列操作，等待队列处理完成
+        if (hasQueueOperations) {
+            // 添加监听器，等待队列处理完成
+            const queueListener = (event, data) => {
+                if (event === 'processingCompleted' || event === 'queueEmpty') {
+                    // 移除监听器
+                    reorderQueue.removeListener(queueListener);
+                    
+                    // 队列处理完成后，重新加载数据以确保最新状态
+                    loadData().then(() => {
+                        // 渲染界面
+                        calendar.render();
+                        goals.forceRender();
+                        
+                        // 启动倒计时更新
+                        if (appData.goals.length > 0) {
+                            countdown.startTimer();
+                        }
+                    });
+                }
+            };
+            
+            // 添加监听器
+            reorderQueue.addListener(queueListener);
+        } else {
+            // 没有队列操作，直接渲染界面
+            calendar.render();
+            goals.forceRender();
+            
+            // 启动倒计时更新
+            if (appData.goals.length > 0) {
+                countdown.startTimer();
+            }
         }
     });
 }
@@ -1763,6 +2228,24 @@ function bindEvents() {
     });
     elements.closeHeatmapBtn.addEventListener('click', chart.close);
     
+    // 备注搜索
+    elements.openNotesSearchBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        notesSearch.open();
+        elements.functionsDropdown.classList.remove('show');
+    });
+    elements.closeNotesSearchBtn.addEventListener('click', () => notesSearch.close());
+    elements.closeNotesSearchFooterBtn.addEventListener('click', () => notesSearch.close());
+    
+    // 添加实时搜索功能 - 使用防抖避免频繁请求
+    let searchTimeout;
+    elements.notesSearchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            notesSearch.search();
+        }, 300); // 300毫秒的延迟
+    });
+    
     // 图表控件事件监听
     elements.chartType.addEventListener('change', chart.render);
     elements.chartPeriod.addEventListener('change', chart.render);
@@ -1819,7 +2302,6 @@ function bindEvents() {
     
     // 确认对话框事件
     elements.closeConfirmBtn.addEventListener('click', () => confirmDialog.close());
-    elements.confirmCancelBtn.addEventListener('click', () => confirmDialog.close());
     
     // 批量添加任务按钮事件
     elements.batchAddTaskBtn.addEventListener('click', () => {
@@ -2454,7 +2936,7 @@ const batchAddTask = {
                             }
                         } catch (error) {
                             // 批量任务处理失败，跳过此任务
-                            console.warn('处理任务时出错:', error);
+                            // 处理任务时出错: error
                         }
                     });
                     
@@ -2758,9 +3240,148 @@ const monthPicker = {
     }
 };
 
+// 备注搜索功能
+const notesSearch = {
+    // 打开搜索模态框
+    open() {
+        elements.notesSearchModal.classList.add('active');
+        elements.notesSearchInput.focus();
+    },
+    
+    // 关闭搜索模态框
+    close() {
+        elements.notesSearchModal.classList.remove('active');
+        elements.notesSearchInput.value = '';
+        notesSearch.clearResults();
+    },
+    
+    // 清空搜索结果
+    clearResults() {
+        elements.searchResultsContainer.innerHTML = '<div class="no-results">请输入关键字开始搜索</div>';
+    },
+    
+    // 执行搜索
+    async search() {
+        const keyword = elements.notesSearchInput.value.trim();
+        
+        if (!keyword) {
+            elements.searchResultsContainer.innerHTML = '<div class="no-results">请输入搜索关键字</div>';
+            return;
+        }
+        
+        // 显示加载状态
+        elements.searchResultsContainer.innerHTML = '<div class="search-loading">搜索中...</div>';
+        
+        try {
+            // 调用API搜索备注
+            const response = await api.searchNotes({
+                keyword
+            });
+            
+            // 使用直接引用替代this来保持上下文
+            notesSearch.displayResults(response.data);
+        } catch (error) {
+            elements.searchResultsContainer.innerHTML = `<div class="no-results">搜索失败: ${error.message}</div>`;
+        }
+    },
+    
+    // 显示搜索结果
+    displayResults(results) {
+        if (!results || results.length === 0) {
+            elements.searchResultsContainer.innerHTML = '<div class="no-results">没有找到匹配的结果</div>';
+            return;
+        }
+        
+        let html = '';
+        results.forEach(result => {
+            // 格式化日期显示
+            const date = new Date(result.date);
+            const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+            
+            // 高亮匹配的关键字
+            let content = result.content;
+            const keyword = elements.notesSearchInput.value.trim();
+            if (keyword) {
+                // 将关键字拆分成单个词，去除空格和空字符串
+                const keywords = keyword.toLowerCase()
+                  .split(/\s+/)  // 按空格拆分
+                  .filter(word => word.length > 0);  // 过滤掉空字符串
+                
+                // 为每个关键字创建高亮
+                keywords.forEach(keyword => {
+                    const regex = new RegExp(`(${keyword})`, 'gi');
+                    content = content.replace(regex, '<span class="search-result-highlight">$1</span>');
+                });
+            }
+            
+            html += `
+                <div class="search-result-item" data-date="${result.date}">
+                    <div class="search-result-date">${formattedDate}</div>
+                    <div class="search-result-content">${content}</div>
+                </div>
+            `;
+        });
+        
+        elements.searchResultsContainer.innerHTML = html;
+        
+        // 添加结果项点击事件
+        document.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                const date = item.dataset.date;
+                await notesSearch.openDateInCalendar(date);
+            });
+        });
+    },
+    
+    // 在日历中打开选中的日期
+    async openDateInCalendar(dateStr) {
+        const date = new Date(dateStr);
+        appData.selectedDate = date;
+        
+        // 切换到日期所在的月份
+        appData.currentMonth = date.getMonth();
+        appData.currentYear = date.getFullYear();
+        
+        // 加载该月份的数据
+        await this.loadMonthData(date.getFullYear(), date.getMonth());
+        
+        // 重新渲染日历
+        calendar.render();
+        
+        // 打开日期编辑模态框
+        dayModal.open(dateStr);
+        
+        // 关闭搜索模态框
+        this.close();
+    },
+    
+    // 加载指定月份的数据
+    async loadMonthData(year, month) {
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        
+        // 格式化日期为YYYY-MM-DD
+        const startDate = firstDay.toISOString().split('T')[0];
+        const endDate = lastDay.toISOString().split('T')[0];
+        
+        try {
+            const response = await api.getDays(startDate, endDate);
+            const days = response.data || [];
+            days.forEach(day => {
+                appData.dailyPlans[day.date] = day;
+            });
+        } catch (error) {
+            // 加载月份数据失败: error
+        }
+    }
+};
+
 // 初始化应用
 function init() {
     // Initializing app...
+    
+    // 首先加载队列系统
+    reorderQueue.loadQueue();
     
     // 检查认证状态
     checkAuthStatus();
