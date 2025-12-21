@@ -21,4 +21,4 @@ services:
       # 数据存储目录
       - DATA_DIR=/app/data
     restart: unless-stopped
-    container_name: timetrace-app timetrace
+    container_name: timetrace-app

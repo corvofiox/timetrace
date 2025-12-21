@@ -1,7 +1,7 @@
 // API服务模块
 const api = {
-    // API基础URL
-    baseURL: 'http://localhost:3000/api',
+    // API基础URL - 动态适应不同环境
+    baseURL: window.appConfig ? window.appConfig.getApiBaseUrl() : 'http://localhost:3000/api',
     
     // 获取认证token
     getToken() {
