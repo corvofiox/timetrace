@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  timetrace-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"  # 后端API端口
+      - "8000:8000"  # 前端服务端口
+    volumes:
+      - ./data:/app/data  # 持久化数据存储
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # JWT密钥配置 - 生产环境中请使用强随机字符串
+      - JWT_SECRET=${JWT_SECRET:-default_jwt_secret_change_in_production}
+      - JWT_EXPIRE=${JWT_EXPIRE:-15m}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-default_refresh_token_secret_change_in_production}
+      - REFRESH_TOKEN_EXPIRE=${REFRESH_TOKEN_EXPIRE:-7d}
+      # 数据存储目录
+      - DATA_DIR=/app/data
+    restart: unless-stopped
+    container_name: timetrace-app timetrace
