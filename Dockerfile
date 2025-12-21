@@ -45,7 +45,8 @@ EXPOSE 3000 8000
 
 # 复制启动脚本
 COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+# 确保脚本有正确的格式和执行权限
+RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
 
 # 启动应用
-CMD ["/app/start.sh"]
+CMD ["/bin/sh", "/app/start.sh"]

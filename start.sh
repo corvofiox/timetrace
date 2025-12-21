@@ -3,29 +3,30 @@
 # 确保数据目录存在
 mkdir -p /app/data
 
-# 自动生成密钥（如果不存在）
-if [ ! -f /app/data/.jwt_secret ]; then
-    echo "生成JWT密钥..."
-    openssl rand -base64 64 > /app/data/.jwt_secret
-fi
+# 密钥文件路径
+JWT_SECRET_FILE="/app/data/.jwt_secret"
+REFRESH_SECRET_FILE="/app/data/.refresh_secret"
+KEYS_GENERATED_FLAG="/app/data/.keys_generated"
 
-if [ ! -f /app/data/.refresh_secret ]; then
-    echo "生成刷新令牌密钥..."
-    openssl rand -base64 64 > /app/data/.refresh_secret
-fi
-
-# 设置环境变量
-export JWT_SECRET=$(cat /app/data/.jwt_secret)
-export REFRESH_TOKEN_SECRET=$(cat /app/data/.refresh_secret)
-
-# 显示密钥信息（仅在首次生成时）
-if [ ! -f /app/data/.keys_generated ]; then
-    echo "========================================"
-    echo "密钥已自动生成并保存在数据目录中"
-    echo "JWT密钥文件: /app/data/.jwt_secret"
-    echo "刷新令牌密钥文件: /app/data/.refresh_secret"
-    echo "========================================"
-    touch /app/data/.keys_generated
+# 检查是否需要生成密钥
+if [ ! -f "$KEYS_GENERATED_FLAG" ] && [ -z "$JWT_SECRET" ] && [ -z "$REFRESH_TOKEN_SECRET" ]; then
+    echo "首次启动，自动生成安全密钥..."
+    
+    # 生成JWT密钥 (64字节强随机字符串)
+    openssl rand -base64 64 > "$JWT_SECRET_FILE"
+    export JWT_SECRET=$(cat "$JWT_SECRET_FILE")
+    
+    # 生成刷新令牌密钥 (64字节强随机字符串)
+    openssl rand -base64 64 > "$REFRESH_SECRET_FILE"
+    export REFRESH_TOKEN_SECRET=$(cat "$REFRESH_SECRET_FILE")
+    
+    # 创建生成标记文件
+    touch "$KEYS_GENERATED_FLAG"
+    
+    echo "密钥已生成并保存在数据目录中"
+elif [ -f "$JWT_SECRET_FILE" ] && [ -z "$JWT_SECRET" ]; then
+    # 从文件加载JWT密钥
+    export JWT_SECRET=$(cat "$JWT_SECRET_FILE")
 fi
 
 # 启动后端服务
