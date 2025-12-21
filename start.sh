@@ -24,10 +24,28 @@ if [ ! -f "$KEYS_GENERATED_FLAG" ] && [ -z "$JWT_SECRET" ] && [ -z "$REFRESH_TOK
     touch "$KEYS_GENERATED_FLAG"
     
     echo "密钥已生成并保存在数据目录中"
-elif [ -f "$JWT_SECRET_FILE" ] && [ -z "$JWT_SECRET" ]; then
-    # 从文件加载JWT密钥
-    export JWT_SECRET=$(cat "$JWT_SECRET_FILE")
+else
+    # 如果环境变量未设置，尝试从文件加载
+    if [ -z "$JWT_SECRET" ] && [ -f "$JWT_SECRET_FILE" ]; then
+        echo "从文件加载JWT密钥..."
+        export JWT_SECRET=$(cat "$JWT_SECRET_FILE")
+    fi
+    
+    if [ -z "$REFRESH_TOKEN_SECRET" ] && [ -f "$REFRESH_SECRET_FILE" ]; then
+        echo "从文件加载刷新令牌密钥..."
+        export REFRESH_TOKEN_SECRET=$(cat "$REFRESH_SECRET_FILE")
+    fi
 fi
+
+# 验证密钥是否已设置
+if [ -z "$JWT_SECRET" ] || [ -z "$REFRESH_TOKEN_SECRET" ]; then
+    echo "错误：JWT密钥或刷新令牌密钥未设置！"
+    echo "请检查环境变量或密钥文件。"
+    exit 1
+fi
+
+echo "JWT密钥状态：已设置"
+echo "刷新令牌密钥状态：已设置"
 
 # 启动后端服务
 cd /app/backend && npm start &
