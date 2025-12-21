@@ -81,4 +81,50 @@
    
    打开浏览器访问：`http://localhost:8000`
 
+### 方式三：使用单一Docker镜像（推荐）
+
+#### 环境要求
+- Docker
+- Docker Compose（可选）
+
+#### 运行步骤
+
+1. **克隆项目**
+   ```bash
+   git clone [项目地址]
+   cd Timetrace
+   ```
+
+2. **使用Docker Compose启动服务**
+   ```bash
+   docker-compose -f docker-compose.all-in-one.yml up -d
+   ```
+
+   或者直接使用Docker命令：
+   ```bash
+   # 构建镜像
+   docker build -f Dockerfile.all-in-one -t timetrace-app:latest .
+   
+   # 运行容器
+   docker run -d --name timetrace-app -p 3000:3000 -p 8000:8000 -v $(pwd)/data:/app/data timetrace-app:latest
+   ```
+
+3. **访问应用**
+   - 前端：`http://localhost:8000`
+   - 后端API：`http://localhost:3000`
+
+4. **停止服务**
+   ```bash
+   docker-compose -f docker-compose.all-in-one.yml down
+   ```
+
+#### 优势
+
+- **简化部署**：单个容器包含完整应用
+- **资源占用少**：相比多容器方案节省资源
+- **易于管理**：只需管理一个容器
+- **快速启动**：容器内服务同时启动
+
+详细部署说明请参考：[DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md)
+
 **目标日历** - 让每一天都充满目标与成就感！

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  # 单一容器包含前端和后端
+  timetrace-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.all-in-one
+    container_name: timetrace-all-in-one
+    ports:
+      - "3000:3000"  # 后端API端口
+      - "8000:8000"  # 前端Web端口
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=d8qlkD7mAqwxim9e+IndzhjNAWVHH0uNQnrkHxIwII0=
+      - JWT_EXPIRE=15m
+      - REFRESH_TOKEN_SECRET=/7E7j8lwAMsEazBqw522mfzRD3d3ma3BD1pBYwKLI70=
+      - REFRESH_TOKEN_EXPIRE=7d
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
