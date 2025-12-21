@@ -13,8 +13,8 @@ RUN cd backend && npm ci --only=production
 # 生产阶段
 FROM node:18-alpine AS production
 
-# 安装Python用于启动前端服务器
-RUN apk add --no-cache python3
+# 安装Python和OpenSSL用于启动前端服务器和生成密钥
+RUN apk add --no-cache python3 openssl
 
 # 设置工作目录
 WORKDIR /app
@@ -38,10 +38,6 @@ RUN mkdir -p /app/data
 # 设置环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV JWT_SECRET=change_me_in_production
-ENV JWT_EXPIRE=15m
-ENV REFRESH_TOKEN_SECRET=change_me_in_production
-ENV REFRESH_TOKEN_EXPIRE=7d
 ENV DATA_DIR=/app/data
 
 # 暴露端口

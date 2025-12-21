@@ -4,7 +4,17 @@ const cors = require('cors');
 const fileDB = require('./models/fileDB');
 
 // Load environment variables
-dotenv.config();
+// 首先尝试从根目录加载.env文件，如果不存在则从当前目录加载
+const path = require('path');
+const rootEnvPath = path.resolve(__dirname, '../../.env');
+const localEnvPath = path.resolve(__dirname, '../.env');
+const fs = require('fs');
+
+if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else {
+  dotenv.config({ path: localEnvPath });
+}
 
 // 初始化数据库
 const initServer = async () => {
