@@ -45,6 +45,37 @@ const writeJsonFile = async (filePath, data) => {
   await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
 };
 
+// 日期验证工具函数
+const dateUtils = {
+  // 验证日期字符串格式是否为YYYY-MM-DD
+  isValidDateString(dateString) {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateString)) return false;
+    
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    
+    // 检查日期是否有效（特别处理31日的情况）
+    return date.getFullYear() === year && 
+           date.getMonth() === month - 1 && 
+           date.getDate() === day;
+  },
+  
+  // 获取月份的天数（正确处理31日的情况）
+  getDaysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+  },
+  
+  // 验证日期范围是否有效
+  isValidDateRange(startDate, endDate) {
+    if (!this.isValidDateString(startDate) || !this.isValidDateString(endDate)) {
+      return false;
+    }
+    
+    return startDate <= endDate;
+  }
+};
+
 // 用户数据操作
 const users = {
   // 获取所有用户
@@ -144,6 +175,63 @@ const days = {
   // 获取所有日计划
   getAll: async () => {
     return await readJsonFile(DAYS_FILE);
+  },
+
+  // 获取指定日期范围内的日计划（性能优化版本）
+  getByDateRange: async (startDate, endDate, userId = null) => {
+    const allDays = await readJsonFile(DAYS_FILE);
+    
+    // 先按用户ID过滤（如果提供了）
+    let filteredDays = userId ? 
+      allDays.filter(day => day.userId === userId) : 
+      allDays;
+    
+    // 再按日期范围过滤
+    return filteredDays.filter(day => {
+      return day.date >= startDate && day.date <= endDate;
+    });
+  },
+
+  // 搜索包含指定关键词的日计划（性能优化版本）
+  searchByKeyword: async (keyword, userId = null) => {
+    const allDays = await readJsonFile(DAYS_FILE);
+    
+    // 先按用户ID过滤（如果提供了）
+    let filteredDays = userId ? 
+      allDays.filter(day => day.userId === userId) : 
+      allDays;
+    
+    // 将关键字拆分成单个词，去除空格和空字符串
+    const keywords = keyword.toLowerCase()
+      .split(/\s+/)  // 按空格拆分
+      .filter(word => word.length > 0);  // 过滤掉空字符串
+    
+    const results = [];
+    
+    // 搜索每日备注
+    filteredDays.forEach(day => {
+      if (day.summary) {
+        const summaryLower = day.summary.toLowerCase();
+        
+        // 检查备注是否包含所有关键字
+        const allKeywordsMatch = keywords.every(keyword => 
+          summaryLower.includes(keyword)
+        );
+        
+        if (allKeywordsMatch) {
+          results.push({
+            date: day.date,
+            content: day.summary,
+            type: 'summary'
+          });
+        }
+      }
+    });
+    
+    // 按日期排序（最新的在前）
+    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return results;
   },
 
   // 根据ID查找日计划
@@ -317,5 +405,6 @@ module.exports = {
   days,
   refreshTokens,
   generateId,
-  init
+  init,
+  dateUtils
 };

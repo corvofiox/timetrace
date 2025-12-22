@@ -64,6 +64,18 @@ const getAllDays = async () => {
   return await fileDB.days.getAll();
 };
 
+// 获取指定日期范围内的日计划（性能优化版本）
+const getDaysByDateRange = async (startDate, endDate, userId) => {
+  await ensureDBInitialized();
+  return await fileDB.days.getByDateRange(startDate, endDate, userId);
+};
+
+// 搜索包含指定关键词的日计划（性能优化版本）
+const searchDaysByKeyword = async (keyword, userId) => {
+  await ensureDBInitialized();
+  return await fileDB.days.searchByKeyword(keyword, userId);
+};
+
 // 根据ID获取日计划
 const getDayById = async (id) => {
   await ensureDBInitialized();
@@ -123,6 +135,8 @@ module.exports = {
   updateGoal,
   deleteGoal,
   getAllDays,
+  getDaysByDateRange,
+  searchDaysByKeyword,
   getDayById,
   getDayByDate,
   createOrUpdateDay,

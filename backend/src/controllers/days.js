@@ -1,10 +1,15 @@
 const {
   getAllDays,
+  getDaysByDateRange,
+  searchDaysByKeyword,
   getDayById,
   getDayByDate,
   createOrUpdateDay,
   deleteDay
 } = require('../models/database');
+
+// 导入日期验证工具
+const dateUtils = require('../models/fileDB').dateUtils;
 
 // @desc    Get all days
 // @route   GET /api/days
@@ -12,23 +17,36 @@ const {
 exports.getDays = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    let days = await getAllDays();
-    
-    // 只获取当前用户的日计划
-    days = days.filter(day => day.userId === req.user.id);
     
     // Filter by date range if provided
     if (startDate && endDate) {
-      days = days.filter(day => {
-        return day.date >= startDate && day.date <= endDate;
+      // 验证日期范围是否有效
+      if (!dateUtils.isValidDateRange(startDate, endDate)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid date range provided'
+        });
+      }
+      
+      // 使用优化的方法直接从数据库获取指定范围的数据
+      const days = await getDaysByDateRange(startDate, endDate, req.user.id);
+      
+      res.status(200).json({
+        success: true,
+        count: days.length,
+        data: days
+      });
+    } else {
+      // 如果没有提供日期范围，则返回用户的所有日计划
+      let days = await getAllDays();
+      days = days.filter(day => day.userId === req.user.id);
+      
+      res.status(200).json({
+        success: true,
+        count: days.length,
+        data: days
       });
     }
-    
-    res.status(200).json({
-      success: true,
-      count: days.length,
-      data: days
-    });
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -76,14 +94,24 @@ exports.getDay = async (req, res) => {
 // @access  Private
 exports.getDayByDate = async (req, res) => {
   try {
-    const day = await getDayByDate(req.params.date, req.user.id);
+    const dateParam = req.params.date;
+    
+    // 验证日期格式是否有效
+    if (!dateUtils.isValidDateString(dateParam)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Expected YYYY-MM-DD'
+      });
+    }
+    
+    const day = await getDayByDate(dateParam, req.user.id);
     
     // 如果找不到该日期的日计划，返回一个空的日计划对象
     if (!day) {
       return res.status(200).json({
         success: true,
         data: {
-          date: req.params.date,
+          date: dateParam,
           userId: req.user.id,
           summary: '',
           tasks: []
@@ -232,41 +260,8 @@ exports.searchNotes = async (req, res) => {
       });
     }
     
-    // 获取所有日计划
-    let days = await getAllDays();
-    
-    // 只获取当前用户的日计划
-    days = days.filter(day => day.userId === req.user.id);
-    
-    const results = [];
-    
-    // 将关键字拆分成单个词，去除空格和空字符串
-    const keywords = keyword.toLowerCase()
-      .split(/\s+/)  // 按空格拆分
-      .filter(word => word.length > 0);  // 过滤掉空字符串
-    
-    // 搜索每日备注
-    days.forEach(day => {
-      if (day.summary) {
-        const summaryLower = day.summary.toLowerCase();
-        
-        // 检查备注是否包含所有关键字
-        const allKeywordsMatch = keywords.every(keyword => 
-          summaryLower.includes(keyword)
-        );
-        
-        if (allKeywordsMatch) {
-          results.push({
-            date: day.date,
-            content: day.summary,
-            type: 'summary'
-          });
-        }
-      }
-    });
-    
-    // 按日期排序（最新的在前）
-    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // 使用优化的搜索方法直接从数据库获取结果
+    const results = await searchDaysByKeyword(keyword, req.user.id);
     
     res.status(200).json({
       success: true,

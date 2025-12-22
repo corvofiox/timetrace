@@ -60,6 +60,33 @@
 
 ### 运行项目
 
+#### 方式一：使用自动设置脚本（推荐）
+
+1. **一键启动**
+   ```bash
+   # Windows
+   start.bat
+   
+   # Linux/macOS
+   chmod +x start.sh
+   ./start.sh
+   ```
+
+2. **仅初始化环境**
+   ```bash
+   # Windows
+   start.bat --init-only
+   
+   # Linux/macOS
+   ./start.sh --init-only
+   ```
+
+3. **访问应用**
+   
+   打开浏览器访问：`http://localhost:8000`
+
+#### 方式二：手动启动
+
 1. **启动后端服务**
    ```bash
    cd backend

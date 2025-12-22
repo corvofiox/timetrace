@@ -20,6 +20,23 @@ const appData = {
         added: [],
         edited: [],
         deleted: []
+    },
+    
+    // 保存当前月份到本地存储
+    saveCurrentMonth() {
+        localStorage.setItem('currentMonth', this.currentMonth);
+        localStorage.setItem('currentYear', this.currentYear);
+    },
+    
+    // 从本地存储恢复当前月份
+    restoreCurrentMonth() {
+        const savedMonth = localStorage.getItem('currentMonth');
+        const savedYear = localStorage.getItem('currentYear');
+        
+        if (savedMonth !== null && savedYear !== null) {
+            this.currentMonth = parseInt(savedMonth, 10);
+            this.currentYear = parseInt(savedYear, 10);
+        }
     }
 };
 
@@ -405,7 +422,40 @@ const elements = {
         searchResultsContainer: document.getElementById('search-results-container')
 };
 
-// 工具函数
+// 数据缓存管理
+const dataCache = {
+    // 存储已加载的月份数据
+    monthDataCache: new Map(),
+    
+    // 检查月份是否已缓存
+    isMonthCached(year, month) {
+        const key = `${year}-${month}`;
+        return this.monthDataCache.has(key);
+    },
+    
+    // 获取缓存的月份数据
+    getCachedMonthData(year, month) {
+        const key = `${year}-${month}`;
+        return this.monthDataCache.get(key) || null;
+    },
+    
+    // 缓存月份数据
+    cacheMonthData(year, month, data) {
+        const key = `${year}-${month}`;
+        this.monthDataCache.set(key, data);
+    },
+    
+    // 清除指定月份的缓存
+    clearMonthCache(year, month) {
+        const key = `${year}-${month}`;
+        this.monthDataCache.delete(key);
+    },
+    
+    // 清除所有缓存
+    clearAllCache() {
+        this.monthDataCache.clear();
+    }
+};
 const utils = {
     // 格式化日期为 YYYY-MM-DD
     formatDate(date) {
@@ -439,6 +489,29 @@ const utils = {
     // 获取月份第一天是星期几
     getFirstDayOfMonth(year, month) {
         return new Date(year, month, 1).getDay();
+    },
+    
+    // 验证日期是否有效（特别处理31日的情况）
+    isValidDate(year, month, day) {
+        // 创建日期对象
+        const date = new Date(year, month, day);
+        // 检查日期是否有效（防止出现2月31日等情况）
+        return date.getFullYear() === year && 
+               date.getMonth() === month && 
+               date.getDate() === day;
+    },
+    
+    // 获取安全的日期范围，确保包含所有有效的月份日期
+    getSafeDateRange(year, month) {
+        const firstDay = new Date(year, month, 1);
+        const daysInMonth = this.getDaysInMonth(year, month);
+        const lastDay = new Date(year, month, daysInMonth);
+        
+        return {
+            startDate: this.formatDate(firstDay),
+            endDate: this.formatDate(lastDay),
+            daysInMonth: daysInMonth
+        };
     },
     
     // 生成唯一ID
@@ -574,6 +647,12 @@ const calendar = {
         
         // 添加当月日期
         for (let day = 1; day <= daysInMonth; day++) {
+            // 验证日期是否有效（特别处理31日的情况）
+            if (!utils.isValidDate(currentYear, currentMonth, day)) {
+                console.warn(`Invalid date detected: ${currentYear}-${currentMonth + 1}-${day}, skipping`);
+                continue;
+            }
+            
             const date = new Date(currentYear, currentMonth, day);
             const dayElement = calendar.createDayElement(day, date);
             if (dayElement) {
@@ -761,8 +840,13 @@ const calendar = {
             appData.currentMonth = 11;
             appData.currentYear--;
         }
-        calendar.render();
-        loadData(); // 重新加载数据
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
+        
+        loadData().then(() => {
+            calendar.render();
+        });
     },
     
     // 切换到下个月
@@ -772,8 +856,13 @@ const calendar = {
             appData.currentMonth = 0;
             appData.currentYear++;
         }
-        calendar.render();
-        loadData(); // 重新加载数据
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
+        
+        loadData().then(() => {
+            calendar.render();
+        });
     },
     
     // 跳转到本月
@@ -781,8 +870,13 @@ const calendar = {
         const today = new Date();
         appData.currentMonth = today.getMonth();
         appData.currentYear = today.getFullYear();
-        calendar.render();
-        loadData(); // 重新加载数据
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
+        
+        loadData().then(() => {
+            calendar.render();
+        });
     }
 };
 
@@ -967,6 +1061,10 @@ const goals = {
             .then(response => {
                 const newGoal = response.data;
                 appData.goals.push(newGoal);
+                
+                // 清除所有缓存，因为新目标可能影响多个月份的显示
+                dataCache.clearAllCache();
+                
                 goals.forceRender();
                 
                 // 启动倒计时更新
@@ -987,6 +1085,10 @@ const goals = {
                 const index = appData.goals.findIndex(goal => goal.id === goalId);
                 if (index !== -1) {
                     appData.goals[index] = updatedGoal;
+                    
+                    // 清除所有缓存，因为目标更新可能影响多个月份的显示
+                    dataCache.clearAllCache();
+                    
                     goals.forceRender();
                 }
             })
@@ -1002,6 +1104,10 @@ const goals = {
                 // 确认删除成功后再从本地数组中移除
                 if (response && response.success) {
                     appData.goals = appData.goals.filter(goal => goal.id !== goalId);
+                    
+                    // 清除所有缓存，因为目标删除可能影响多个月份的显示
+                    dataCache.clearAllCache();
+                    
                     goals.forceRender();
                     
                     // 如果没有目标了，停止倒计时更新
@@ -1291,6 +1397,10 @@ const dayModal = {
                 appData.pendingTaskChanges.added = [];
                 appData.pendingTaskChanges.edited = [];
                 appData.pendingTaskChanges.deleted = [];
+                
+                // 清除相关月份的缓存，因为数据已更新
+                const date = new Date(dateStr);
+                dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
                 
                 // 保存操作完成
                 // 保存日计划数据
@@ -1661,7 +1771,7 @@ const chart = {
             // 按月计算
             for (let month = 0; month < 12; month++) {
                 const monthStart = new Date(startDate.getFullYear(), month, 1);
-                const monthEnd = new Date(startDate.getFullYear(), month + 1, 0);
+                const monthEnd = new Date(startDate.getFullYear(), month, dateUtils.getDaysInMonth(startDate.getFullYear(), month));
                 data.push(chart.calculateOverallCompletionRateForPeriod(monthStart, monthEnd));
             }
         } else {
@@ -2057,6 +2167,9 @@ function showApp() {
     elements.authContainer.style.display = 'none';
     elements.appContainer.style.display = 'flex';
     
+    // 恢复当前月份状态
+    appData.restoreCurrentMonth();
+    
     // 显示用户名
     if (appData.user && appData.user.username) {
         const userWelcome = document.getElementById('user-welcome');
@@ -2125,23 +2238,22 @@ function loadData() {
         });
     
     // 加载当前月份的日计划
-    const firstDay = new Date(appData.currentYear, appData.currentMonth, 1);
-    const lastDay = new Date(appData.currentYear, appData.currentMonth + 1, 0);
-    
-    // 格式化日期为YYYY-MM-DD
-    const startDate = firstDay.toISOString().split('T')[0];
-    const endDate = lastDay.toISOString().split('T')[0];
+    // 使用getSafeDateRange确保正确处理月末日期（包括31日）
+    const dateRange = utils.getSafeDateRange(appData.currentYear, appData.currentMonth);
+    const startDate = dateRange.startDate;
+    const endDate = dateRange.endDate;
     
     const daysPromise = api.getDays(startDate, endDate)
         .then(response => {
-            appData.dailyPlans = {};
+            // 不要重置整个dailyPlans对象，只更新当前月份的数据
             const days = response.data || [];
             days.forEach(day => {
                 appData.dailyPlans[day.date] = day;
             });
         })
         .catch(error => {
-            appData.dailyPlans = {}; // 确保dailyPlans始终是对象
+            // 不要重置整个dailyPlans对象，保持现有数据
+            console.error('加载日计划失败:', error);
         });
     
     // 返回Promise，等待所有数据加载完成
@@ -2541,15 +2653,16 @@ const batchAddTask = {
         // 重置表单
         this.resetForm();
         
-        // 设置默认日期范围（本月）
+        // 设置默认日期：起始日期为今天，结束日期为月末最后一天
         const today = new Date();
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const todayStr = utils.formatDate(today);
         const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const lastDayStr = utils.formatDate(lastDay);
         
-        elements.batchStartDate.value = utils.formatDate(firstDay);
-        elements.batchEndDate.value = utils.formatDate(lastDay);
-        elements.weekdaysStartDate.value = utils.formatDate(firstDay);
-        elements.weekdaysEndDate.value = utils.formatDate(lastDay);
+        elements.batchStartDate.value = todayStr;
+        elements.batchEndDate.value = lastDayStr;
+        elements.weekdaysStartDate.value = todayStr;
+        elements.weekdaysEndDate.value = lastDayStr;
         
         // 生成迷你日历
         this.renderMiniCalendar();
@@ -3194,6 +3307,14 @@ const monthPicker = {
     selectMonth(month) {
         this.selectedMonth = month;
         this.selectedYear = parseInt(elements.yearInput.value);
+        
+        // 更新appData的当前月份
+        appData.currentYear = this.selectedYear;
+        appData.currentMonth = this.selectedMonth;
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
+        
         this.updateCalendar();
         this.close();
     },
@@ -3203,6 +3324,13 @@ const monthPicker = {
         const year = parseInt(elements.yearInput.value);
         if (!isNaN(year) && year >= 2020 && year <= 2100) {
             this.selectedYear = year;
+            
+            // 更新appData的当前年份
+            appData.currentYear = this.selectedYear;
+            
+            // 保存当前月份状态
+            appData.saveCurrentMonth();
+            
             this.generateMonthButtons();
         }
     },
@@ -3212,6 +3340,13 @@ const monthPicker = {
         const newYear = this.selectedYear + delta;
         if (newYear >= 2020 && newYear <= 2100) {
             this.selectedYear = newYear;
+            
+            // 更新appData的当前年份
+            appData.currentYear = this.selectedYear;
+            
+            // 保存当前月份状态
+            appData.saveCurrentMonth();
+            
             this.generateMonthButtons();
         }
     },
@@ -3221,6 +3356,14 @@ const monthPicker = {
         const today = new Date();
         this.selectedYear = today.getFullYear();
         this.selectedMonth = today.getMonth();
+        
+        // 更新appData的当前月份
+        appData.currentYear = this.selectedYear;
+        appData.currentMonth = this.selectedMonth;
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
+        
         this.updateCalendar();
         this.close();
     },
@@ -3231,6 +3374,9 @@ const monthPicker = {
         appData.currentYear = this.selectedYear;
         appData.currentMonth = this.selectedMonth;
         calendar.currentDate = new Date(this.selectedYear, this.selectedMonth, 1);
+        
+        // 保存当前月份状态
+        appData.saveCurrentMonth();
         
         // 重新渲染日历
         calendar.render();
@@ -3357,19 +3503,35 @@ const notesSearch = {
     
     // 加载指定月份的数据
     async loadMonthData(year, month) {
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
+        // 检查缓存中是否已有该月份数据
+        if (dataCache.isMonthCached(year, month)) {
+            console.log(`使用缓存数据: ${year}年${month + 1}月`);
+            const cachedData = dataCache.getCachedMonthData(year, month);
+            
+            // 将缓存数据加载到应用数据中
+            cachedData.forEach(day => {
+                appData.dailyPlans[day.date] = day;
+            });
+            return;
+        }
         
-        // 格式化日期为YYYY-MM-DD
-        const startDate = firstDay.toISOString().split('T')[0];
-        const endDate = lastDay.toISOString().split('T')[0];
+        // 使用getSafeDateRange确保正确处理月末日期（包括31日）
+        const dateRange = utils.getSafeDateRange(year, month);
+        const startDate = dateRange.startDate;
+        const endDate = dateRange.endDate;
         
         try {
             const response = await api.getDays(startDate, endDate);
             const days = response.data || [];
+            
+            // 将数据加载到应用数据中
             days.forEach(day => {
                 appData.dailyPlans[day.date] = day;
             });
+            
+            // 缓存该月份数据
+            dataCache.cacheMonthData(year, month, days);
+            console.log(`已缓存数据: ${year}年${month + 1}月，共${days.length}条记录`);
         } catch (error) {
             // 加载月份数据失败: error
         }
@@ -3379,6 +3541,9 @@ const notesSearch = {
 // 初始化应用
 function init() {
     // Initializing app...
+    
+    // 恢复当前月份状态
+    appData.restoreCurrentMonth();
     
     // 首先加载队列系统
     reorderQueue.loadQueue();

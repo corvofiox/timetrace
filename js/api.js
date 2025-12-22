@@ -129,9 +129,17 @@ const api = {
                 }
             } catch (refreshError) {
                 // 刷新令牌也过期或无效，需要重新登录
-                this.removeTokens();
-                window.location.href = '/login.html';
-                throw new Error('会话已过期，请重新登录');
+                        this.removeTokens();
+                        // 显示登录界面而不是跳转到不存在的页面
+                        if (typeof elements !== 'undefined' && elements.authContainer && elements.appContainer) {
+                            elements.authContainer.style.display = 'flex';
+                            elements.appContainer.style.display = 'none';
+                        } else {
+                            // 如果elements对象不可用，直接使用DOM方法
+                            document.getElementById('auth-container').style.display = 'flex';
+                            document.getElementById('app-container').style.display = 'none';
+                        }
+                        throw new Error('会话已过期，请重新登录');
             }
         }
         
