@@ -1,48 +1,18 @@
 const express = require('express');
-const dotenv = require('dotenv');
 const cors = require('cors');
 const fileDB = require('./models/fileDB');
+const { initConfig } = require('./config/keys');
 
-// Load environment variables
-// 在Docker环境中，.env文件位于/app目录
-const path = require('path');
-const fs = require('fs');
-
-// 检查是否在Docker环境中
-const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-
-let envPath;
-
-if (isDocker) {
-  // Docker环境中的路径
-  envPath = '/app/.env';
-} else {
-  // 本地开发环境中的路径
-  const rootEnvPath = path.resolve(__dirname, '../../.env');
-  const localEnvPath = path.resolve(__dirname, '../.env');
-  
-  if (fs.existsSync(rootEnvPath)) {
-    envPath = rootEnvPath;
-  } else {
-    envPath = localEnvPath;
-  }
-}
-
-// 加载环境变量
-console.log(`Loading environment from: ${envPath}`);
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-  console.log('Environment variables loaded successfully');
-} else {
-  console.error(`Environment file not found at: ${envPath}`);
-  process.exit(1);
-}
-
-// 初始化数据库
+// 初始化服务器
 const initServer = async () => {
   try {
+    // 初始化配置（加载环境变量和验证密钥）
+    initConfig();
+    
+    // 初始化数据库
     await fileDB.init();
   } catch (error) {
+    console.error('服务器初始化失败:', error.message);
     process.exit(1);
   }
 };
@@ -92,11 +62,6 @@ app.use((req, res, next) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/days', require('./routes/days'));
-
-// 健康检查端点
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
 app.get('/debug/env', (req, res) => {

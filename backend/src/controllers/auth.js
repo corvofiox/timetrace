@@ -1,118 +1,15 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
-const fs = require('fs');
-
-// 检查是否在Docker环境中
-const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-
-let envPath;
-
-if (isDocker) {
-  // Docker环境中的路径
-  envPath = '/app/.env';
-  console.log('Auth: 检测到Docker环境，DOCKER_ENV=', process.env.DOCKER_ENV);
-  console.log('Auth: /.dockerenv存在:', fs.existsSync('/.dockerenv'));
-} else {
-  // 本地开发环境中的路径
-  const rootEnvPath = path.resolve(__dirname, '../../.env');
-  const localEnvPath = path.resolve(__dirname, '../.env');
-  
-  if (fs.existsSync(rootEnvPath)) {
-    envPath = rootEnvPath;
-  } else {
-    envPath = localEnvPath;
-  }
-  console.log('Auth: 检测到本地开发环境');
-}
-
-// 显式加载.env文件
-if (fs.existsSync(envPath)) {
-  console.log('Auth: 显式加载.env文件:', envPath);
-  require('dotenv').config({ path: envPath });
-  
-  // 验证关键环境变量
-  if (!process.env.JWT_SECRET) {
-    console.error('Auth: JWT_SECRET未加载成功');
-  } else {
-    console.log('Auth: JWT_SECRET已加载，长度:', process.env.JWT_SECRET.length);
-  }
-  
-  if (!process.env.REFRESH_TOKEN_SECRET) {
-    console.error('Auth: REFRESH_TOKEN_SECRET未加载成功');
-  } else {
-    console.log('Auth: REFRESH_TOKEN_SECRET已加载，长度:', process.env.REFRESH_TOKEN_SECRET.length);
-  }
-} else {
-  console.error('Auth: 未找到.env文件:', envPath);
-}
+const { getJWTSecret, getRefreshTokenSecret } = require('../config/keys');
 
 // 创建JWT令牌的辅助函数
 function createJWTToken(payload, expiresIn) {
-  // 确保环境变量已加载
-  if (!process.env.JWT_SECRET) {
-    console.log('Auth: JWT_SECRET未找到，尝试重新加载.env文件');
-    
-    // 确定环境路径
-    let envPath;
-    const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-    
-    if (isDocker) {
-      envPath = '/app/.env';
-    } else {
-      const rootEnvPath = path.resolve(__dirname, '../../.env');
-      const localEnvPath = path.resolve(__dirname, '../.env');
-      envPath = fs.existsSync(rootEnvPath) ? rootEnvPath : localEnvPath;
-    }
-    
-    // 重新加载环境变量
-    if (fs.existsSync(envPath)) {
-      console.log('Auth: 重新加载.env文件:', envPath);
-      require('dotenv').config({ path: envPath });
-    }
-  }
-  
-  // 再次检查
-  if (!process.env.JWT_SECRET) {
-    console.error('Auth: JWT_SECRET仍然未找到');
-    throw new Error('JWT_SECRET环境变量未设置');
-  }
-  
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, getJWTSecret(), { expiresIn });
 }
 
 // 创建刷新令牌的辅助函数
 function createRefreshToken(payload, expiresIn) {
-  // 确保环境变量已加载
-  if (!process.env.REFRESH_TOKEN_SECRET) {
-    console.log('Auth: REFRESH_TOKEN_SECRET未找到，尝试重新加载.env文件');
-    
-    // 确定环境路径
-    let envPath;
-    const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-    
-    if (isDocker) {
-      envPath = '/app/.env';
-    } else {
-      const rootEnvPath = path.resolve(__dirname, '../../.env');
-      const localEnvPath = path.resolve(__dirname, '../.env');
-      envPath = fs.existsSync(rootEnvPath) ? rootEnvPath : localEnvPath;
-    }
-    
-    // 重新加载环境变量
-    if (fs.existsSync(envPath)) {
-      console.log('Auth: 重新加载.env文件:', envPath);
-      require('dotenv').config({ path: envPath });
-    }
-  }
-  
-  // 再次检查
-  if (!process.env.REFRESH_TOKEN_SECRET) {
-    console.error('Auth: REFRESH_TOKEN_SECRET仍然未找到');
-    throw new Error('REFRESH_TOKEN_SECRET环境变量未设置');
-  }
-  
-  return jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, { expiresIn });
+  return jwt.sign(payload, getRefreshTokenSecret(), { expiresIn });
 }
 
 const { 
@@ -121,8 +18,7 @@ const {
   createUser,
   saveRefreshToken,
   findRefreshToken,
-  deleteRefreshToken,
-  deleteAllUserRefreshTokens
+  deleteRefreshToken
 } = require('../models/database');
 
 // @desc    Register user
@@ -306,29 +202,7 @@ exports.refreshToken = async (req, res) => {
     }
 
     // Verify refresh token
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET || (() => {
-      // 如果环境变量不存在，尝试加载
-      let envPath;
-      const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-      
-      if (isDocker) {
-        envPath = '/app/.env';
-      } else {
-        const rootEnvPath = path.resolve(__dirname, '../../.env');
-        const localEnvPath = path.resolve(__dirname, '../.env');
-        envPath = fs.existsSync(rootEnvPath) ? rootEnvPath : localEnvPath;
-      }
-      
-      if (fs.existsSync(envPath)) {
-        require('dotenv').config({ path: envPath });
-      }
-      
-      if (!process.env.REFRESH_TOKEN_SECRET) {
-        throw new Error('REFRESH_TOKEN_SECRET环境变量未设置');
-      }
-      
-      return process.env.REFRESH_TOKEN_SECRET;
-    })());
+    const decoded = jwt.verify(refreshToken, getRefreshTokenSecret());
 
     // Get user from the token
     const user = await findUserById(decoded.id);
@@ -376,9 +250,6 @@ exports.logout = async (req, res) => {
     if (refreshToken) {
       deleteRefreshToken(refreshToken);
     }
-    
-    // Alternatively, remove all refresh tokens for this user
-    // deleteAllUserRefreshTokens(req.user.id);
 
     res.status(200).json({
       success: true,

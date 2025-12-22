@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { isDockerEnvironment, getEnvPath } = require('./backend/src/config/keys');
 
 // 颜色输出函数
 const colors = {
@@ -43,12 +44,12 @@ const args = process.argv.slice(2);
 const initOnly = args.includes('--init-only');
 const noKeys = args.includes('--no-keys');
 
-// 检查是否在Docker环境中
-const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+// 使用统一的环境检测
+const isDocker = isDockerEnvironment();
 
 // 项目根目录
 const projectRoot = isDocker ? '/app' : __dirname;
-const envPath = path.join(projectRoot, '.env');
+const envPath = getEnvPath();
 const dataDir = path.join(projectRoot, 'data');
 
 // 默认.env模板
@@ -103,35 +104,18 @@ async function initEnvironment() {
     colorLog('✅ .env文件已存在', 'green');
   }
   
-  // 生成密钥 - 在Docker环境中总是生成新密钥以确保安全性
-  if (!noKeys && (!envExists || !hasValidKeys() || isDocker)) {
+  // 生成密钥 - 仅在必要时生成新密钥
+  if (!noKeys && (!envExists || !hasValidKeys())) {
     colorLog('🔑 生成安全密钥...', 'yellow');
     
     let envContent = fs.readFileSync(envPath, 'utf8');
     
-    // 替换空密钥或现有密钥（在Docker环境中）
+    // 替换空密钥
     envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generateSecureKey()}`);
     envContent = envContent.replace(/REFRESH_TOKEN_SECRET=.*/, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
     
     fs.writeFileSync(envPath, envContent);
     colorLog('✅ 安全密钥已生成并保存', 'green');
-    
-    // 验证密钥是否正确保存
-    const newEnvContent = fs.readFileSync(envPath, 'utf8');
-    const jwtMatch = newEnvContent.match(/JWT_SECRET=(.+)/);
-    const refreshMatch = newEnvContent.match(/REFRESH_TOKEN_SECRET=(.+)/);
-    
-    if (jwtMatch && jwtMatch[1]) {
-      colorLog(`✅ JWT_SECRET已设置，长度: ${jwtMatch[1].length}`, 'green');
-    } else {
-      colorLog('❌ JWT_SECRET设置失败', 'red');
-    }
-    
-    if (refreshMatch && refreshMatch[1]) {
-      colorLog(`✅ REFRESH_TOKEN_SECRET已设置，长度: ${refreshMatch[1].length}`, 'green');
-    } else {
-      colorLog('❌ REFRESH_TOKEN_SECRET设置失败', 'red');
-    }
   } else {
     colorLog('✅ 密钥已配置', 'green');
   }
@@ -195,9 +179,6 @@ async function startServices() {
   
   // 设置环境变量
   const env = { ...process.env };
-  if (isDocker) {
-    env.DOCKER_ENV = 'true';
-  }
   
   const backendProcess = spawn('node', ['src/server.js'], {
     cwd: path.join(projectRoot, 'backend'),

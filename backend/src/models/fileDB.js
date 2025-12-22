@@ -1,8 +1,9 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { getDataDir } = require('./config/keys');
 
-// 数据文件路径 - 支持环境变量配置
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+// 获取数据目录路径
+const DATA_DIR = getDataDir();
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const GOALS_FILE = path.join(DATA_DIR, 'goals.json');
 const DAYS_FILE = path.join(DATA_DIR, 'days.json');
