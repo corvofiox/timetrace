@@ -15,18 +15,27 @@ git clone <repository-url>
 cd Timetrace
 ```
 
-### 2. 构建Docker镜像
+### 2. 初始化环境
+```bash
+# 初始化项目环境，生成.env文件和数据目录
+node setup.js --init-only
+```
+
+### 3. 构建Docker镜像
 ```bash
 docker build -t timetrace:latest .
 ```
 
-### 3. 运行Docker容器
+### 4. 运行Docker容器
 ```bash
 # 基本运行
 docker run -d -p 3000:3000 -p 8000:8000 --name timetrace timetrace:latest
 
 # 持久化数据存储（推荐）
-docker run -d -p 3000:3000 -p 8000:8000 -v /path/to/data:/app/data --name timetrace timetrace:latest
+docker run -d -p 3000:3000 -p 8000:8000 -v ./backend/src/data:/app/data --name timetrace timetrace:latest
+
+# 使用Docker Compose（推荐）
+docker-compose up -d
 ```
 
 ### 4. 访问应用程序
@@ -45,7 +54,14 @@ docker run -d -p 3000:3000 -p 8000:8000 -v /path/to/data:/app/data --name timetr
 - 8000: 前端静态文件服务
 
 ### 数据持久化
-应用程序数据存储在 `/app/data` 目录中，建议使用Docker卷或绑定挂载来持久化数据。
+应用程序数据存储在 `/app/data` 目录中，包括：
+- 用户数据 (users.json)
+- 目标数据 (goals.json)
+- 日记录数据 (days.json)
+- 刷新令牌数据 (refreshTokens.json)
+- 环境配置文件 (.env)
+
+建议使用Docker卷或绑定挂载来持久化数据。
 
 ## 环境变量
 以下环境变量可在运行时覆盖:
@@ -104,10 +120,12 @@ services:
       - "3000:3000"
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - ./backend/src/data:/app/data  # 挂载数据目录(包含.env文件)
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATA_DIR=/app/data
     restart: unless-stopped
 ```
+
+**注意**: 使用 Docker Compose 前，请先运行 `node setup.js --init-only` 生成 `.env` 文件。`.env` 文件会被生成在 `backend/src/data` 目录中，与数据文件一起挂载到容器中。

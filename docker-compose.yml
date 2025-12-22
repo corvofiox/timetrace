@@ -8,8 +8,7 @@ services:
       - "3000:3000"
       - "8000:8000"
     volumes:
-      - ./backend/src/data:/app/data
-      - ./.env:/app/.env:ro  # 挂载宿主机的.env文件(只读)
+      - ./backend/src/data:/app/data  # 挂载数据目录(包含.env文件)
     environment:
       - NODE_ENV=production
       - PORT=3000

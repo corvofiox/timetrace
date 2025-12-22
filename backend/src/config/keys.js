@@ -11,18 +11,13 @@ function isDockerEnvironment() {
 // 统一的.env文件路径解析
 function getEnvPath() {
   if (isDockerEnvironment()) {
-    return '/app/.env';
+    // Docker环境中，.env文件在数据目录中
+    return '/app/data/.env';
   }
   
-  // 在本地环境中，优先使用项目根目录的.env文件
-  const rootEnvPath = path.resolve(__dirname, '../../../.env');
-  if (fs.existsSync(rootEnvPath)) {
-    return rootEnvPath;
-  }
-  
-  // 如果根目录不存在.env文件，则使用backend目录下的.env文件
-  const backendEnvPath = path.resolve(__dirname, '../../.env');
-  return backendEnvPath;
+  // 在本地环境中，.env文件也在数据目录中
+  // 使用相对路径，避免循环依赖
+  return path.join(__dirname, '..', 'data', '.env');
 }
 
 // 加载环境变量

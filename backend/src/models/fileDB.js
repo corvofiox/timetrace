@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { getDataDir } = require('./config/keys');
+const { getDataDir } = require('../config/keys');
 
 // 获取数据目录路径
 const DATA_DIR = getDataDir();

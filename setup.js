@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { isDockerEnvironment, getEnvPath } = require('./backend/src/config/keys');
+const { isDockerEnvironment, getEnvPath, getDataDir } = require('./backend/src/config/keys');
 
 // 颜色输出函数
 const colors = {
@@ -49,8 +49,8 @@ const isDocker = isDockerEnvironment();
 
 // 项目根目录
 const projectRoot = isDocker ? '/app' : __dirname;
-const envPath = getEnvPath();
-const dataDir = path.join(projectRoot, 'data');
+const envPath = path.join(getDataDir(), '.env');  // 将.env文件放在数据目录中
+const dataDir = getDataDir();  // 使用统一的数据目录函数
 
 // 默认.env模板
 const envTemplate = `# 环境变量配置文件
@@ -68,7 +68,7 @@ REFRESH_TOKEN_SECRET=
 REFRESH_TOKEN_EXPIRE=7d
 
 # 数据存储目录
-DATA_DIR=./data
+DATA_DIR=/app/data
 
 # MongoDB连接字符串 (如果使用MongoDB而非文件存储)
 # MONGODB_URI=mongodb://localhost:27017/calendar-app
@@ -83,6 +83,7 @@ function generateSecureKey() {
 async function initEnvironment() {
   colorLog('\n🚀 初始化 Timetrace 项目环境...', 'cyan');
   colorLog(`项目根目录: ${projectRoot}`, 'cyan');
+  colorLog(`数据目录: ${dataDir}`, 'cyan');
   colorLog(`环境文件路径: ${envPath}`, 'cyan');
   
   // 创建数据目录
