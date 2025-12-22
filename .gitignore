@@ -2,3 +2,4 @@ backend/node_modules/
 backend/src/data/
 需求文档.md
 .env*
+*.log

@@ -6,28 +6,45 @@ const fs = require('fs');
 // 检查是否在Docker环境中
 const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
 
-// 在Docker环境中，显式加载.env文件
+let envPath;
+
 if (isDocker) {
-  const envPath = '/app/.env';
-  if (fs.existsSync(envPath)) {
-    console.log('Auth: 在Docker环境中显式加载.env文件:', envPath);
-    require('dotenv').config({ path: envPath });
-    
-    // 验证关键环境变量
-    if (!process.env.JWT_SECRET) {
-      console.error('Auth: JWT_SECRET未加载成功');
-    } else {
-      console.log('Auth: JWT_SECRET已加载，长度:', process.env.JWT_SECRET.length);
-    }
-    
-    if (!process.env.REFRESH_TOKEN_SECRET) {
-      console.error('Auth: REFRESH_TOKEN_SECRET未加载成功');
-    } else {
-      console.log('Auth: REFRESH_TOKEN_SECRET已加载，长度:', process.env.REFRESH_TOKEN_SECRET.length);
-    }
+  // Docker环境中的路径
+  envPath = '/app/.env';
+  console.log('Auth: 检测到Docker环境，DOCKER_ENV=', process.env.DOCKER_ENV);
+  console.log('Auth: /.dockerenv存在:', fs.existsSync('/.dockerenv'));
+} else {
+  // 本地开发环境中的路径
+  const rootEnvPath = path.resolve(__dirname, '../../.env');
+  const localEnvPath = path.resolve(__dirname, '../.env');
+  
+  if (fs.existsSync(rootEnvPath)) {
+    envPath = rootEnvPath;
   } else {
-    console.error('Auth: Docker环境中未找到.env文件:', envPath);
+    envPath = localEnvPath;
   }
+  console.log('Auth: 检测到本地开发环境');
+}
+
+// 显式加载.env文件
+if (fs.existsSync(envPath)) {
+  console.log('Auth: 显式加载.env文件:', envPath);
+  require('dotenv').config({ path: envPath });
+  
+  // 验证关键环境变量
+  if (!process.env.JWT_SECRET) {
+    console.error('Auth: JWT_SECRET未加载成功');
+  } else {
+    console.log('Auth: JWT_SECRET已加载，长度:', process.env.JWT_SECRET.length);
+  }
+  
+  if (!process.env.REFRESH_TOKEN_SECRET) {
+    console.error('Auth: REFRESH_TOKEN_SECRET未加载成功');
+  } else {
+    console.log('Auth: REFRESH_TOKEN_SECRET已加载，长度:', process.env.REFRESH_TOKEN_SECRET.length);
+  }
+} else {
+  console.error('Auth: 未找到.env文件:', envPath);
 }
 
 const { 

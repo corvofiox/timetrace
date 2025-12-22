@@ -192,10 +192,18 @@ async function startServices() {
   
   // 启动后端服务
   colorLog('📡 启动后端服务...', 'yellow');
+  
+  // 设置环境变量
+  const env = { ...process.env };
+  if (isDocker) {
+    env.DOCKER_ENV = 'true';
+  }
+  
   const backendProcess = spawn('node', ['src/server.js'], {
     cwd: path.join(projectRoot, 'backend'),
     stdio: 'pipe',
-    detached: true
+    detached: true,
+    env: env
   });
   
   backendProcess.stdout.on('data', (data) => {
