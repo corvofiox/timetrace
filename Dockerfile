@@ -32,8 +32,13 @@ COPY styles ./styles
 COPY js ./js
 COPY libs ./libs
 
-# 创建数据目录
+# 复制启动脚本
+COPY setup.js /app/setup.js
+COPY start.sh /app/start.sh
+
+# 创建数据目录并初始化环境
 RUN mkdir -p /app/data
+RUN node /app/setup.js --init-only
 
 # 设置环境变量
 ENV NODE_ENV=production
@@ -43,9 +48,6 @@ ENV DATA_DIR=/app/data
 # 暴露端口
 EXPOSE 3000 8000
 
-# 复制启动脚本
-COPY setup.js /app/setup.js
-COPY start.sh /app/start.sh
 # 确保脚本有正确的格式和执行权限
 RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
 

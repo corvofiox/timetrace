@@ -21,7 +21,29 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { isDockerEnvironment, getEnvPath, getDataDir } = require('./backend/src/config/keys');
+
+// 环境检测函数 - 直接在setup.js中实现，避免不必要的依赖
+function isDockerEnvironment() {
+  // 检查 /.dockerenv 文件是否存在，这是最可靠的Docker环境检测方法
+  return fs.existsSync('/.dockerenv');
+}
+
+// 获取数据目录路径 - 直接在setup.js中实现
+function getDataDir() {
+  // 如果环境变量中已设置DATA_DIR，则使用它
+  if (process.env.DATA_DIR) {
+    return process.env.DATA_DIR;
+  }
+  
+  // 根据环境自动选择默认路径
+  if (isDockerEnvironment()) {
+    // Docker环境中的默认路径
+    return '/app/data';
+  } else {
+    // 本地开发环境中的默认路径
+    return path.join(__dirname, 'backend', 'src', 'data');
+  }
+}
 
 // 颜色输出函数
 const colors = {
@@ -49,8 +71,12 @@ const isDocker = isDockerEnvironment();
 
 // 项目根目录
 const projectRoot = isDocker ? '/app' : __dirname;
-const envPath = path.join(getDataDir(), '.env');  // 将.env文件放在数据目录中
-const dataDir = getDataDir();  // 使用统一的数据目录函数
+
+// 获取数据目录路径 - 使用统一函数
+const dataDir = getDataDir();  
+
+// 获取.env文件路径 - 确保在Docker环境中使用正确的路径
+const envPath = isDocker ? '/app/data/.env' : path.join(dataDir, '.env');
 
 // 默认.env模板
 const envTemplate = `# 环境变量配置文件
@@ -68,7 +94,7 @@ REFRESH_TOKEN_SECRET=
 REFRESH_TOKEN_EXPIRE=7d
 
 # 数据存储目录
-DATA_DIR=/app/data
+DATA_DIR=${dataDir}
 
 # MongoDB连接字符串 (如果使用MongoDB而非文件存储)
 # MONGODB_URI=mongodb://localhost:27017/calendar-app
@@ -89,9 +115,9 @@ async function initEnvironment() {
   // 创建数据目录
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
-    colorLog('✅ 创建数据目录: ./data', 'green');
+    colorLog(`✅ 创建数据目录: ${dataDir}`, 'green');
   } else {
-    colorLog('✅ 数据目录已存在: ./data', 'green');
+    colorLog(`✅ 数据目录已存在: ${dataDir}`, 'green');
   }
   
   // 检查.env文件
@@ -115,8 +141,24 @@ async function initEnvironment() {
     envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generateSecureKey()}`);
     envContent = envContent.replace(/REFRESH_TOKEN_SECRET=.*/, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
     
+    // 确保DATA_DIR设置正确
+    envContent = envContent.replace(/DATA_DIR=.*/, `DATA_DIR=${dataDir}`);
+    
     fs.writeFileSync(envPath, envContent);
     colorLog('✅ 安全密钥已生成并保存', 'green');
+  } else if (envExists) {
+    // 即使不生成新密钥，也确保DATA_DIR设置正确
+    let envContent = fs.readFileSync(envPath, 'utf8');
+    const dataDirMatch = envContent.match(/DATA_DIR=(.+)/);
+    
+    if (!dataDirMatch || dataDirMatch[1] !== dataDir) {
+      colorLog('📝 更新数据目录路径...', 'yellow');
+      envContent = envContent.replace(/DATA_DIR=.*/, `DATA_DIR=${dataDir}`);
+      fs.writeFileSync(envPath, envContent);
+      colorLog('✅ 数据目录路径已更新', 'green');
+    }
+    
+    colorLog('✅ 密钥已配置', 'green');
   } else {
     colorLog('✅ 密钥已配置', 'green');
   }
@@ -179,7 +221,11 @@ async function startServices() {
   colorLog('📡 启动后端服务...', 'yellow');
   
   // 设置环境变量
-  const env = { ...process.env };
+  const env = { 
+    ...process.env,
+    DATA_DIR: dataDir,
+    ENV_PATH: envPath
+  };
   
   const backendProcess = spawn('node', ['src/server.js'], {
     cwd: path.join(projectRoot, 'backend'),
