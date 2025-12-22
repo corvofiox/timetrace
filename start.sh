@@ -28,9 +28,13 @@ else
     # 检查密钥是否有效
     if ! grep -q "JWT_SECRET=[^[:space:]]" /app/.env || ! grep -q "REFRESH_TOKEN_SECRET=[^[:space:]]" /app/.env; then
         echo "Docker环境中.env文件密钥无效，正在重新生成..."
-        node setup.js --init-only --no-keys
+        node setup.js --init-only
     fi
 fi
+
+# 验证.env文件内容
+echo "验证.env文件内容..."
+cat /app/.env | grep -E "(JWT_SECRET|REFRESH_TOKEN_SECRET)"
 
 # 运行设置脚本
 node setup.js "$@"

@@ -43,8 +43,11 @@ const args = process.argv.slice(2);
 const initOnly = args.includes('--init-only');
 const noKeys = args.includes('--no-keys');
 
+// 检查是否在Docker环境中
+const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+
 // 项目根目录
-const projectRoot = __dirname;
+const projectRoot = isDocker ? '/app' : __dirname;
 const envPath = path.join(projectRoot, '.env');
 const dataDir = path.join(projectRoot, 'data');
 
@@ -78,6 +81,8 @@ function generateSecureKey() {
 // 初始化环境
 async function initEnvironment() {
   colorLog('\n🚀 初始化 Timetrace 项目环境...', 'cyan');
+  colorLog(`项目根目录: ${projectRoot}`, 'cyan');
+  colorLog(`环境文件路径: ${envPath}`, 'cyan');
   
   // 创建数据目录
   if (!fs.existsSync(dataDir)) {
@@ -99,8 +104,6 @@ async function initEnvironment() {
   }
   
   // 生成密钥 - 在Docker环境中总是生成新密钥以确保安全性
-  const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-  
   if (!noKeys && (!envExists || !hasValidKeys() || isDocker)) {
     colorLog('🔑 生成安全密钥...', 'yellow');
     
@@ -112,6 +115,23 @@ async function initEnvironment() {
     
     fs.writeFileSync(envPath, envContent);
     colorLog('✅ 安全密钥已生成并保存', 'green');
+    
+    // 验证密钥是否正确保存
+    const newEnvContent = fs.readFileSync(envPath, 'utf8');
+    const jwtMatch = newEnvContent.match(/JWT_SECRET=(.+)/);
+    const refreshMatch = newEnvContent.match(/REFRESH_TOKEN_SECRET=(.+)/);
+    
+    if (jwtMatch && jwtMatch[1]) {
+      colorLog(`✅ JWT_SECRET已设置，长度: ${jwtMatch[1].length}`, 'green');
+    } else {
+      colorLog('❌ JWT_SECRET设置失败', 'red');
+    }
+    
+    if (refreshMatch && refreshMatch[1]) {
+      colorLog(`✅ REFRESH_TOKEN_SECRET已设置，长度: ${refreshMatch[1].length}`, 'green');
+    } else {
+      colorLog('❌ REFRESH_TOKEN_SECRET设置失败', 'red');
+    }
   } else {
     colorLog('✅ 密钥已配置', 'green');
   }

@@ -4,16 +4,38 @@ const cors = require('cors');
 const fileDB = require('./models/fileDB');
 
 // Load environment variables
-// 首先尝试从根目录加载.env文件，如果不存在则从当前目录加载
+// 在Docker环境中，.env文件位于/app目录
 const path = require('path');
-const rootEnvPath = path.resolve(__dirname, '../../.env');
-const localEnvPath = path.resolve(__dirname, '../.env');
 const fs = require('fs');
 
-if (fs.existsSync(rootEnvPath)) {
-  dotenv.config({ path: rootEnvPath });
+// 检查是否在Docker环境中
+const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+
+let envPath;
+
+if (isDocker) {
+  // Docker环境中的路径
+  envPath = '/app/.env';
 } else {
-  dotenv.config({ path: localEnvPath });
+  // 本地开发环境中的路径
+  const rootEnvPath = path.resolve(__dirname, '../../.env');
+  const localEnvPath = path.resolve(__dirname, '../.env');
+  
+  if (fs.existsSync(rootEnvPath)) {
+    envPath = rootEnvPath;
+  } else {
+    envPath = localEnvPath;
+  }
+}
+
+// 加载环境变量
+console.log(`Loading environment from: ${envPath}`);
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+  console.log('Environment variables loaded successfully');
+} else {
+  console.error(`Environment file not found at: ${envPath}`);
+  process.exit(1);
 }
 
 // 初始化数据库
@@ -74,6 +96,19 @@ app.use('/api/days', require('./routes/days'));
 // 健康检查端点
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
+app.get('/debug/env', (req, res) => {
+  res.status(200).json({
+    JWT_SECRET_EXISTS: !!process.env.JWT_SECRET,
+    JWT_SECRET_LENGTH: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
+    REFRESH_TOKEN_SECRET_EXISTS: !!process.env.REFRESH_TOKEN_SECRET,
+    REFRESH_TOKEN_SECRET_LENGTH: process.env.REFRESH_TOKEN_SECRET ? process.env.REFRESH_TOKEN_SECRET.length : 0,
+    NODE_ENV: process.env.NODE_ENV,
+    DOCKER_ENV: process.env.DOCKER_ENV,
+    DATA_DIR: process.env.DATA_DIR
+  });
 });
 
 const PORT = process.env.PORT || 3000;

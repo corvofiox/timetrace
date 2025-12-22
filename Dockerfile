@@ -53,5 +53,8 @@ RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
 # 在容器启动时初始化环境（创建.env文件和生成密钥）
 RUN node setup.js --init-only
 
+# 验证.env文件是否正确创建
+RUN cat /app/.env | grep -E "(JWT_SECRET|REFRESH_TOKEN_SECRET)" || echo "JWT密钥未正确设置"
+
 # 启动应用
 CMD ["/bin/sh", "/app/start.sh"]
