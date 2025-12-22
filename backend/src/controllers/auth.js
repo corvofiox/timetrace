@@ -1,5 +1,35 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+
+// 检查是否在Docker环境中
+const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+
+// 在Docker环境中，显式加载.env文件
+if (isDocker) {
+  const envPath = '/app/.env';
+  if (fs.existsSync(envPath)) {
+    console.log('Auth: 在Docker环境中显式加载.env文件:', envPath);
+    require('dotenv').config({ path: envPath });
+    
+    // 验证关键环境变量
+    if (!process.env.JWT_SECRET) {
+      console.error('Auth: JWT_SECRET未加载成功');
+    } else {
+      console.log('Auth: JWT_SECRET已加载，长度:', process.env.JWT_SECRET.length);
+    }
+    
+    if (!process.env.REFRESH_TOKEN_SECRET) {
+      console.error('Auth: REFRESH_TOKEN_SECRET未加载成功');
+    } else {
+      console.log('Auth: REFRESH_TOKEN_SECRET已加载，长度:', process.env.REFRESH_TOKEN_SECRET.length);
+    }
+  } else {
+    console.error('Auth: Docker环境中未找到.env文件:', envPath);
+  }
+}
+
 const { 
   findUserByEmail, 
   findUserById, 
