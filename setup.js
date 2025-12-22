@@ -98,15 +98,17 @@ async function initEnvironment() {
     colorLog('✅ .env文件已存在', 'green');
   }
   
-  // 生成密钥
-  if (!noKeys && (!envExists || !hasValidKeys())) {
+  // 生成密钥 - 在Docker环境中总是生成新密钥以确保安全性
+  const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+  
+  if (!noKeys && (!envExists || !hasValidKeys() || isDocker)) {
     colorLog('🔑 生成安全密钥...', 'yellow');
     
     let envContent = fs.readFileSync(envPath, 'utf8');
     
-    // 替换空密钥
-    envContent = envContent.replace(/JWT_SECRET=/, `JWT_SECRET=${generateSecureKey()}`);
-    envContent = envContent.replace(/REFRESH_TOKEN_SECRET=/, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
+    // 替换空密钥或现有密钥（在Docker环境中）
+    envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generateSecureKey()}`);
+    envContent = envContent.replace(/REFRESH_TOKEN_SECRET=.*/, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
     
     fs.writeFileSync(envPath, envContent);
     colorLog('✅ 安全密钥已生成并保存', 'green');

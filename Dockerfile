@@ -39,6 +39,7 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV DATA_DIR=/app/data
+ENV DOCKER_ENV=true
 
 # 暴露端口
 EXPOSE 3000 8000
@@ -48,6 +49,9 @@ COPY setup.js /app/setup.js
 COPY start.sh /app/start.sh
 # 确保脚本有正确的格式和执行权限
 RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
+
+# 在容器启动时初始化环境（创建.env文件和生成密钥）
+RUN node setup.js --init-only
 
 # 启动应用
 CMD ["/bin/sh", "/app/start.sh"]
