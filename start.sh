@@ -21,8 +21,8 @@ if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
 fi
 
 # 在Docker环境中，确保.env文件存在
-if [ ! -f "/app/.env" ]; then
-    echo "Docker环境中未找到.env文件，请确保正确挂载.env文件"
+if [ ! -f "/app/data/.env" ]; then
+    echo "Docker环境中未找到.env文件，请确保正确挂载数据目录(包含.env文件)"
     exit 1
 fi
 

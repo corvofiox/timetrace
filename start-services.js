@@ -25,14 +25,14 @@ async function startServices() {
   colorLog('🚀 启动 Timetrace 服务...', 'cyan');
   
   // 检查.env文件
-  const envPath = path.join(projectRoot, '.env');
+  const envPath = path.join(projectRoot, 'backend', 'src', 'data', '.env');
   if (!fs.existsSync(envPath)) {
     colorLog('❌ 错误: .env文件不存在，请先运行 start.bat --init-only', 'red');
     process.exit(1);
   }
   
   // 创建数据目录
-  const dataDir = path.join(projectRoot, 'data');
+  const dataDir = path.join(projectRoot, 'backend', 'src', 'data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
