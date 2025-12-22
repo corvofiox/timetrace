@@ -46,8 +46,9 @@ build/
 
 # 文档
 README.md
-*.md
 docs/
+# 保留DOCKER_DEPLOYMENT.md在镜像中，方便用户参考
+# DOCKER_DEPLOYMENT.md
 
 # Docker相关
 Dockerfile*

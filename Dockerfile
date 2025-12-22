@@ -13,8 +13,8 @@ RUN cd backend && npm ci --only=production
 # 生产阶段
 FROM node:18-alpine AS production
 
-# 安装Python和OpenSSL用于启动前端服务器和生成密钥
-RUN apk add --no-cache python3 openssl
+# 安装Python、OpenSSL和curl用于启动前端服务器、生成密钥和健康检查
+RUN apk add --no-cache python3 openssl curl
 
 # 设置工作目录
 WORKDIR /app
@@ -44,6 +44,7 @@ ENV DATA_DIR=/app/data
 EXPOSE 3000 8000
 
 # 复制启动脚本
+COPY setup.js /app/setup.js
 COPY start.sh /app/start.sh
 # 确保脚本有正确的格式和执行权限
 RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
