@@ -36,14 +36,14 @@ COPY libs ./libs
 COPY setup.js /app/setup.js
 COPY start.sh /app/start.sh
 
-# 设置环境变量（必须在初始化之前设置）
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV DATA_DIR=/app/data
-
 # 创建数据目录并初始化环境
 RUN mkdir -p /app/data
 RUN node /app/setup.js --init-only
+
+# 设置环境变量
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV DATA_DIR=/app/data
 
 # 暴露端口
 EXPOSE 3000 8000

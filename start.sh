@@ -20,14 +20,11 @@ if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
     exit 1
 fi
 
-# 确保.env文件存在（volume挂载会覆盖容器内的文件）
+# 在Docker环境中，确保.env文件存在
 if [ ! -f "/app/data/.env" ]; then
-    echo "未找到.env文件，正在创建..."
-    node /app/setup.js --init-only --no-keys
-    echo "✅ .env文件已创建"
-else
-    echo "✅ .env文件已存在"
+    echo "Docker环境中未找到.env文件，正在创建..."
+    node setup.js --init-only
 fi
 
 # 运行设置脚本
-node /app/setup.js "$@"
+node setup.js "$@"
