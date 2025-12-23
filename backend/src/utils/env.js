@@ -25,8 +25,7 @@ function getDataDir() {
 }
 
 function getEnvPath() {
-  const dataDir = getDataDir();
-  return path.join(dataDir, '.env');
+  return path.join(getProjectRoot(), '.env');
 }
 
 module.exports = {
