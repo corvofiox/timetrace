@@ -36,9 +36,8 @@ COPY libs ./libs
 COPY setup.js /app/setup.js
 COPY start.sh /app/start.sh
 
-# 创建数据目录并初始化环境
+# 创建数据目录（但不初始化.env，因为会被卷挂载覆盖）
 RUN mkdir -p /app/data
-RUN node /app/setup.js --init-only
 
 # 设置环境变量
 ENV NODE_ENV=production

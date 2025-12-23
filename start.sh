@@ -26,5 +26,6 @@ if [ ! -f "/app/data/.env" ]; then
     node setup.js --init-only
 fi
 
-# 运行设置脚本
-node setup.js "$@"
+# 启动后端服务
+echo "启动后端服务..."
+cd /app/backend && node src/server.js
