@@ -24,35 +24,36 @@ const app = express();
 // 配置CORS以允许前端跨域请求
 app.use(cors({
   origin: (origin, callback) => {
-    // 允许没有origin的请求（如移动应用、Postman等）
     if (!origin) return callback(null, true);
     
-    // 从环境变量获取允许的来源列表
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
       : [];
     
-    // 如果没有配置允许的来源，使用默认安全策略
     if (allowedOrigins.length === 0) {
-      // 开发环境：允许本地开发服务器
-      if (process.env.NODE_ENV !== 'production') {
-        const devOrigins = [
-          'http://localhost:8000',
-          'http://localhost:8080',
-          'http://localhost:3000',
-          'http://127.0.0.1:8000',
-          'http://127.0.0.1:8080',
-          'http://127.0.0.1:3000'
-        ];
-        if (devOrigins.includes(origin)) {
-          return callback(null, true);
-        }
+      const devOrigins = [
+        'http://localhost:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:8000',
+        'http://127.0.0.1:3000'
+      ];
+      if (devOrigins.includes(origin)) {
+        return callback(null, true);
       }
-      // 生产环境：拒绝未配置的来源
+      
+      const prodOrigins = [
+        'http://localhost:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:8000',
+        'http://127.0.0.1:3000'
+      ];
+      if (prodOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
       return callback(new Error('CORS policy violation: origin not allowed'));
     }
     
-    // 检查来源是否在允许列表中
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
