@@ -2,7 +2,16 @@ const fs = require('fs');
 const path = require('path');
 
 function isDockerEnvironment() {
-  return fs.existsSync('/.dockerenv');
+  if (fs.existsSync('/.dockerenv')) {
+    return true;
+  }
+  if (fs.existsSync('/run/.containerenv')) {
+    return true;
+  }
+  if (process.env.NODE_ENV === 'production' && process.env.DATA_DIR === '/app/data') {
+    return true;
+  }
+  return false;
 }
 
 function getProjectRoot() {
