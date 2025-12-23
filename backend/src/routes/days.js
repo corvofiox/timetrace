@@ -7,7 +7,8 @@ const {
   createOrUpdateDay,
   updateDay,
   deleteDay,
-  searchNotes
+  searchNotes,
+  batchUpdateDays
 } = require('../controllers/days');
 const { protect } = require('../middleware/auth');
 
@@ -17,6 +18,9 @@ router.route('/')
 
 router.route('/search')
   .get(protect, searchNotes);
+
+router.route('/batch')
+  .post(protect, batchUpdateDays);
 
 router.route('/date/:date')
   .get(protect, getDayByDate);

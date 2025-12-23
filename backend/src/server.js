@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fileDB = require('./models/fileDB');
 const { initConfig } = require('./config/keys');
+const { cleanExpiredRefreshTokens } = require('./models/database');
 
 // 初始化服务器
 const initServer = async () => {
@@ -26,9 +27,37 @@ app.use(cors({
     // 允许没有origin的请求（如移动应用、Postman等）
     if (!origin) return callback(null, true);
     
-    // 在生产环境中，可以在这里添加允许的域名白名单
-    // 目前允许所有来源，适用于Docker容器内的前端
-    return callback(null, true);
+    // 从环境变量获取允许的来源列表
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+      : [];
+    
+    // 如果没有配置允许的来源，使用默认安全策略
+    if (allowedOrigins.length === 0) {
+      // 开发环境：允许本地开发服务器
+      if (process.env.NODE_ENV !== 'production') {
+        const devOrigins = [
+          'http://localhost:8000',
+          'http://localhost:8080',
+          'http://localhost:3000',
+          'http://127.0.0.1:8000',
+          'http://127.0.0.1:8080',
+          'http://127.0.0.1:3000'
+        ];
+        if (devOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+      }
+      // 生产环境：拒绝未配置的来源
+      return callback(new Error('CORS policy violation: origin not allowed'));
+    }
+    
+    // 检查来源是否在允许列表中
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('CORS policy violation: origin not allowed'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -38,22 +67,35 @@ app.use(express.json());
 
 // Content Security Policy middleware
 app.use((req, res, next) => {
-  // 动态获取当前主机名
+  // 从环境变量获取允许的域名，如果没有则使用请求的主机名
+  const allowedHosts = process.env.CSP_ALLOWED_HOSTS 
+    ? process.env.CSP_ALLOWED_HOSTS.split(',').map(h => h.trim())
+    : [];
+  
   const host = req.get('host');
   const hostname = host ? host.split(':')[0] : 'localhost';
+  const port = host ? host.split(':')[1] || '3000' : '3000';
+  
+  // 确定允许的连接源
+  let connectSrc;
+  if (allowedHosts.length > 0) {
+    connectSrc = allowedHosts.map(h => `http://${h} ws://${h}`).join(' ');
+  } else {
+    connectSrc = `'self' http://${hostname}:${port} ws://${hostname}:${port}`;
+  }
   
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data:; " +
+    `default-src 'self'; ` +
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval'; ` +
+    `style-src 'self' 'unsafe-inline'; ` +
+    `img-src 'self' data:; ` +
     `font-src 'self'; ` +
-    `connect-src 'self' http://${hostname}:3000 ws://${hostname}:3000; ` +
-    "frame-src 'none'; " +
-    "object-src 'none'; " +
-    "base-uri 'self'; " +
-    "form-action 'self';"
+    `connect-src ${connectSrc}; ` +
+    `frame-src 'none'; ` +
+    `object-src 'none'; ` +
+    `base-uri 'self'; ` +
+    `form-action 'self';`
   );
   next();
 });
@@ -64,23 +106,54 @@ app.use('/api/goals', require('./routes/goals'));
 app.use('/api/days', require('./routes/days'));
 
 // 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
-app.get('/debug/env', (req, res) => {
-  res.status(200).json({
-    JWT_SECRET_EXISTS: !!process.env.JWT_SECRET,
-    JWT_SECRET_LENGTH: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
-    REFRESH_TOKEN_SECRET_EXISTS: !!process.env.REFRESH_TOKEN_SECRET,
-    REFRESH_TOKEN_SECRET_LENGTH: process.env.REFRESH_TOKEN_SECRET ? process.env.REFRESH_TOKEN_SECRET.length : 0,
-    NODE_ENV: process.env.NODE_ENV,
-    DOCKER_ENV: process.env.DOCKER_ENV,
-    DATA_DIR: process.env.DATA_DIR
+// 仅在开发环境且启用调试模式时可用
+if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
+  app.get('/debug/env', (req, res) => {
+    res.status(200).json({
+      JWT_SECRET_EXISTS: !!process.env.JWT_SECRET,
+      JWT_SECRET_LENGTH: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
+      REFRESH_TOKEN_SECRET_EXISTS: !!process.env.REFRESH_TOKEN_SECRET,
+      REFRESH_TOKEN_SECRET_LENGTH: process.env.REFRESH_TOKEN_SECRET ? process.env.REFRESH_TOKEN_SECRET.length : 0,
+      NODE_ENV: process.env.NODE_ENV,
+      DOCKER_ENV: process.env.DOCKER_ENV,
+      DATA_DIR: process.env.DATA_DIR
+    });
   });
-});
+}
 
 const PORT = process.env.PORT || 3000;
 
 // 启动服务器
 const startServer = async () => {
   await initServer();
+  
+  // 启动定时清理过期令牌任务（每天凌晨执行）
+  const scheduleTokenCleanup = () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    const msUntilMidnight = tomorrow - now;
+    
+    setTimeout(async () => {
+      try {
+        const deletedCount = await cleanExpiredRefreshTokens(7);
+        if (deletedCount > 0) {
+          console.log(`已清理 ${deletedCount} 个过期的刷新令牌`);
+        }
+      } catch (error) {
+        console.error('清理过期令牌失败:', error.message);
+      }
+      
+      // 设置下一次清理
+      scheduleTokenCleanup();
+    }, msUntilMidnight);
+  };
+  
+  // 启动定时清理任务
+  scheduleTokenCleanup();
+  
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

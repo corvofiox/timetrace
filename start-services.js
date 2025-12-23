@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const http = require('http');
+const { getProjectRoot, getDataDir, getEnvPath } = require('./backend/src/utils/env');
 
 // 颜色输出函数
 const colors = {
@@ -20,8 +22,101 @@ function colorLog(message, color = 'reset') {
 // 项目根目录
 const projectRoot = __dirname;
 
+// 进程管理器
+class ProcessManager {
+  constructor() {
+    this.processes = {};
+    this.shuttingDown = false;
+  }
+
+  addProcess(name, process) {
+    this.processes[name] = process;
+  }
+
+  async stopProcess(name, timeout = 5000) {
+    const process = this.processes[name];
+    if (!process || process.killed) {
+      return;
+    }
+
+    colorLog(`正在停止 ${name}...`, 'yellow');
+    
+    // 尝试优雅关闭
+    process.kill('SIGTERM');
+    
+    // 等待进程退出
+    const exited = await new Promise(resolve => {
+      const timer = setTimeout(() => {
+        resolve(false);
+      }, timeout);
+      
+      process.once('exit', () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
+    
+    // 如果进程没有退出，强制终止
+    if (!exited) {
+      colorLog(`${name} 未响应，强制终止...`, 'yellow');
+      process.kill('SIGKILL');
+      await new Promise(resolve => process.once('exit', resolve));
+    }
+    
+    colorLog(`${name} 已停止`, 'green');
+  }
+
+  async stopAll() {
+    if (this.shuttingDown) {
+      return;
+    }
+    
+    this.shuttingDown = true;
+    colorLog('\n🛑 正在停止所有服务...', 'yellow');
+    
+    // 先停止前端
+    if (this.processes.frontend) {
+      await this.stopProcess('frontend');
+    }
+    
+    // 再停止后端
+    if (this.processes.backend) {
+      await this.stopProcess('backend');
+    }
+    
+    colorLog('✅ 所有服务已停止', 'green');
+  }
+}
+
+// 健康检查函数
+function checkHealth(port, path = '/') {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'localhost',
+      port: port,
+      path: path,
+      method: 'GET',
+      timeout: 2000
+    };
+    
+    const req = http.request(options, (res) => {
+      resolve(res.statusCode < 500);
+    });
+    
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    
+    req.end();
+  });
+}
+
 // 启动服务
 async function startServices() {
+  const processManager = new ProcessManager();
+  
   colorLog('🚀 启动 Timetrace 服务...', 'cyan');
   
   // 检查.env文件
@@ -45,6 +140,8 @@ async function startServices() {
     detached: false
   });
   
+  processManager.addProcess('backend', backendProcess);
+  
   let backendStarted = false;
   backendProcess.stdout.on('data', (data) => {
     const output = data.toString().trim();
@@ -66,25 +163,28 @@ async function startServices() {
   });
   
   backendProcess.on('close', (code) => {
-    if (code !== 0) {
+    if (code !== 0 && !processManager.shuttingDown) {
       colorLog(`后端进程退出，代码: ${code}`, 'red');
+      process.exit(1);
     }
   });
   
-  // 等待后端启动
+  // 使用健康检查等待后端启动
+  colorLog('等待后端服务就绪...', 'yellow');
   await new Promise(resolve => {
-    const checkInterval = setInterval(() => {
-      if (backendStarted) {
+    const checkInterval = setInterval(async () => {
+      const isHealthy = await checkHealth(3000);
+      if (isHealthy || backendStarted) {
         clearInterval(checkInterval);
         resolve();
       }
     }, 1000);
     
-    // 最多等待10秒
+    // 最多等待15秒
     setTimeout(() => {
       clearInterval(checkInterval);
       resolve();
-    }, 10000);
+    }, 15000);
   });
   
   // 启动前端服务
@@ -94,6 +194,8 @@ async function startServices() {
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false
   });
+  
+  processManager.addProcess('frontend', frontendProcess);
   
   let frontendStarted = false;
   frontendProcess.stdout.on('data', (data) => {
@@ -116,25 +218,28 @@ async function startServices() {
   });
   
   frontendProcess.on('close', (code) => {
-    if (code !== 0) {
+    if (code !== 0 && !processManager.shuttingDown) {
       colorLog(`前端进程退出，代码: ${code}`, 'red');
+      process.exit(1);
     }
   });
   
-  // 等待前端启动
+  // 使用健康检查等待前端启动
+  colorLog('等待前端服务就绪...', 'yellow');
   await new Promise(resolve => {
-    const checkInterval = setInterval(() => {
-      if (frontendStarted) {
+    const checkInterval = setInterval(async () => {
+      const isHealthy = await checkHealth(8000);
+      if (isHealthy || frontendStarted) {
         clearInterval(checkInterval);
         resolve();
       }
     }, 1000);
     
-    // 最多等待5秒
+    // 最多等待10秒
     setTimeout(() => {
       clearInterval(checkInterval);
       resolve();
-    }, 5000);
+    }, 10000);
   });
   
   // 显示访问信息
@@ -144,16 +249,13 @@ async function startServices() {
   colorLog('\n按 Ctrl+C 停止所有服务', 'yellow');
   
   // 处理退出信号
-  process.on('SIGINT', () => {
-    colorLog('\n🛑 正在停止服务...', 'yellow');
-    
-    // 终止子进程
-    backendProcess.kill();
-    frontendProcess.kill();
-    
-    colorLog('✅ 服务已停止', 'green');
+  const handleShutdown = async () => {
+    await processManager.stopAll();
     process.exit(0);
-  });
+  };
+  
+  process.on('SIGINT', handleShutdown);
+  process.on('SIGTERM', handleShutdown);
   
   // 保持进程运行
   process.stdin.resume();

@@ -3,8 +3,10 @@ const {
   getGoalById,
   createGoal,
   updateGoal,
-  deleteGoal
+  deleteGoal,
+  reorderGoals
 } = require('../models/database');
+const { successResponse, errorResponse, validationErrorResponse, notFoundResponse, createdResponse } = require('../utils/response');
 
 // @desc    Get all goals
 // @route   GET /api/goals
@@ -24,16 +26,12 @@ exports.getGoals = async (req, res) => {
       return new Date(a.createdAt) - new Date(b.createdAt);
     });
     
-    res.status(200).json({
-      success: true,
+    successResponse(res, {
       count: sortedGoals.length,
       data: sortedGoals
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -45,29 +43,16 @@ exports.getGoal = async (req, res) => {
     const goal = await getGoalById(req.params.id);
     
     if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return notFoundResponse(res, 'Goal not found');
     }
     
-    // 确保目标属于当前用户
     if (goal.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this goal'
-      });
+      return errorResponse(res, 'Not authorized to access this goal', 403);
     }
     
-    res.status(200).json({
-      success: true,
-      data: goal
-    });
+    successResponse(res, { data: goal });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -76,7 +61,6 @@ exports.getGoal = async (req, res) => {
 // @access  Private
 exports.createGoal = async (req, res) => {
   try {
-    // 确保创建的目标与当前用户关联
     const goalData = {
       ...req.body,
       userId: req.user.id
@@ -84,15 +68,9 @@ exports.createGoal = async (req, res) => {
     
     const goal = await createGoal(goalData);
     
-    res.status(201).json({
-      success: true,
-      data: goal
-    });
+    createdResponse(res, { data: goal });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -104,31 +82,18 @@ exports.updateGoal = async (req, res) => {
     const existingGoal = await getGoalById(req.params.id);
     
     if (!existingGoal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return notFoundResponse(res, 'Goal not found');
     }
     
-    // 确保目标属于当前用户
     if (existingGoal.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this goal'
-      });
+      return errorResponse(res, 'Not authorized to update this goal', 403);
     }
     
     const goal = await updateGoal(req.params.id, req.body);
     
-    res.status(200).json({
-      success: true,
-      data: goal
-    });
+    successResponse(res, { data: goal });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -140,31 +105,18 @@ exports.deleteGoal = async (req, res) => {
     const existingGoal = await getGoalById(req.params.id);
     
     if (!existingGoal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return notFoundResponse(res, 'Goal not found');
     }
     
-    // 确保目标属于当前用户
     if (existingGoal.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this goal'
-      });
+      return errorResponse(res, 'Not authorized to delete this goal', 403);
     }
     
     const goal = await deleteGoal(req.params.id);
     
-    res.status(200).json({
-      success: true,
-      data: {}
-    });
+    successResponse(res, { data: {} });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -176,42 +128,16 @@ exports.reorderGoals = async (req, res) => {
     const { goalIds } = req.body;
     
     if (!goalIds || !Array.isArray(goalIds)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Goal IDs array is required'
-      });
+      return validationErrorResponse(res, 'Goal IDs array is required');
     }
     
-    // 获取所有当前用户的目标
-    const allGoals = await getAllGoals();
-    const userGoals = allGoals.filter(goal => goal.userId === req.user.id);
+    await reorderGoals(goalIds);
     
-    // 顺序更新每个目标的order字段，避免并发问题
-    for (let i = 0; i < goalIds.length; i++) {
-      const goalId = goalIds[i];
-      const goal = userGoals.find(g => g.id.toString() === goalId.toString());
-      
-      if (goal) {
-        try {
-          await updateGoal(goal.id, { order: i });
-        } catch (error) {
-          throw error;
-        }
-      }
-    }
-    
-    // 返回更新后的目标列表
     const updatedGoals = (await getAllGoals()).filter(goal => goal.userId === req.user.id);
     const sortedGoals = updatedGoals.sort((a, b) => a.order - b.order);
     
-    res.status(200).json({
-      success: true,
-      data: sortedGoals
-    });
+    successResponse(res, { data: sortedGoals });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };

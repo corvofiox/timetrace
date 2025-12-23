@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getJWTSecret, getRefreshTokenSecret } = require('../config/keys');
+const { validationErrorResponse, unauthorizedResponse, notFoundResponse, createdResponse, successResponse, errorResponse } = require('../utils/response');
 
 // 创建JWT令牌的辅助函数
 function createJWTToken(payload, expiresIn) {
@@ -28,43 +29,41 @@ exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Check if user exists
-    const existingUser = await findUserByEmail(email);
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User with that email already exists'
-      });
+    if (!password || password.trim() === '') {
+      return validationErrorResponse(res, 'Password is required');
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password || '', salt);
+    if (password.length < 6) {
+      return validationErrorResponse(res, 'Password must be at least 6 characters long');
+    }
 
-    // Create user
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      return validationErrorResponse(res, 'User with that email already exists');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const user = await createUser({
       username,
       email,
       password: hashedPassword
     });
 
-    // Create token
     const token = createJWTToken(
       { id: user.id },
       process.env.JWT_EXPIRE || '15m'
     );
     
-    // Create refresh token
     const refreshToken = createRefreshToken(
       { id: user.id },
       process.env.REFRESH_TOKEN_EXPIRE || '7d'
     );
     
-    // Save refresh token to database
     await saveRefreshToken(refreshToken, user.id);
 
-    res.status(201).json({
-      success: true,
+    createdResponse(res, {
       token,
       refreshToken,
       user: {
@@ -74,10 +73,7 @@ exports.register = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -88,51 +84,39 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate email and password
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide an email and password'
-      });
+      return validationErrorResponse(res, 'Please provide an email and password');
     }
 
-    // Check for user
+    if (password.trim() === '') {
+      return validationErrorResponse(res, 'Password is required');
+    }
+
     const user = await findUserByEmail(email);
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      return unauthorizedResponse(res, 'Invalid credentials');
     }
 
-    // Check if password matches
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      return unauthorizedResponse(res, 'Invalid credentials');
     }
 
-    // Create token
     const token = createJWTToken(
       { id: user.id },
       process.env.JWT_EXPIRE || '15m'
     );
     
-    // Create refresh token
     const refreshToken = createRefreshToken(
       { id: user.id },
       process.env.REFRESH_TOKEN_EXPIRE || '7d'
     );
     
-    // Save refresh token to database
     await saveRefreshToken(refreshToken, user.id);
 
-    res.status(200).json({
-      success: true,
+    successResponse(res, {
       token,
       refreshToken,
       user: {
@@ -142,10 +126,7 @@ exports.login = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -157,24 +138,14 @@ exports.getMe = async (req, res) => {
     const user = await findUserById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return notFoundResponse(res, 'User not found');
     }
 
-    // Return user without password
     const { password, ...userWithoutPassword } = user;
 
-    res.status(200).json({
-      success: true,
-      data: userWithoutPassword
-    });
+    successResponse(res, { data: userWithoutPassword });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -186,56 +157,33 @@ exports.refreshToken = async (req, res) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(401).json({
-        success: false,
-        message: 'No refresh token provided'
-      });
+      return unauthorizedResponse(res, 'No refresh token provided');
     }
 
-    // Check if refresh token exists in database
     const tokenData = await findRefreshToken(refreshToken);
     if (!tokenData) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid refresh token'
-      });
+      return unauthorizedResponse(res, 'Invalid refresh token');
     }
 
-    // Verify refresh token
     const decoded = jwt.verify(refreshToken, getRefreshTokenSecret());
 
-    // Get user from the token
     const user = await findUserById(decoded.id);
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found'
-      });
+      return unauthorizedResponse(res, 'User not found');
     }
 
-    // Create new access token
     const newToken = createJWTToken(
       { id: user.id },
       process.env.JWT_EXPIRE || '15m'
     );
 
-    res.status(200).json({
-      success: true,
-      token: newToken
-    });
+    successResponse(res, { token: newToken });
   } catch (error) {
-    // If refresh token is expired or invalid
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired refresh token'
-      });
+      return unauthorizedResponse(res, 'Invalid or expired refresh token');
     }
     
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -246,19 +194,12 @@ exports.logout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
     
-    // If refresh token is provided, remove it from database
     if (refreshToken) {
-      deleteRefreshToken(refreshToken);
+      await deleteRefreshToken(refreshToken);
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Logged out successfully'
-    });
+    successResponse(res, { message: 'Logged out successfully' });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };

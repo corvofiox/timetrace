@@ -5,11 +5,12 @@ const {
   getDayById,
   getDayByDate,
   createOrUpdateDay,
-  deleteDay
+  deleteDay,
+  batchUpdateDays
 } = require('../models/database');
 
-// 导入日期验证工具
 const dateUtils = require('../models/fileDB').dateUtils;
+const { successResponse, errorResponse, validationErrorResponse, notFoundResponse, createdResponse } = require('../utils/response');
 
 // @desc    Get all days
 // @route   GET /api/days
@@ -20,38 +21,28 @@ exports.getDays = async (req, res) => {
     
     // Filter by date range if provided
     if (startDate && endDate) {
-      // 验证日期范围是否有效
       if (!dateUtils.isValidDateRange(startDate, endDate)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid date range provided'
-        });
+        return validationErrorResponse(res, 'Invalid date range provided');
       }
       
-      // 使用优化的方法直接从数据库获取指定范围的数据
       const days = await getDaysByDateRange(startDate, endDate, req.user.id);
       
-      res.status(200).json({
-        success: true,
+      successResponse(res, {
         count: days.length,
         data: days
       });
     } else {
-      // 如果没有提供日期范围，则返回用户的所有日计划
       let days = await getAllDays();
       days = days.filter(day => day.userId === req.user.id);
       
-      res.status(200).json({
-        success: true,
+      successResponse(res, {
         count: days.length,
         data: days
       });
     }
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    console.error('获取日计划 - 错误:', error);
+    errorResponse(res, error.message);
   }
 };
 
@@ -63,29 +54,16 @@ exports.getDay = async (req, res) => {
     const day = await getDayById(req.params.id);
     
     if (!day) {
-      return res.status(404).json({
-        success: false,
-        message: 'Day not found'
-      });
+      return notFoundResponse(res, 'Day not found');
     }
     
-    // 确保日计划属于当前用户
     if (day.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this day'
-      });
+      return errorResponse(res, 'Not authorized to access this day', 403);
     }
     
-    res.status(200).json({
-      success: true,
-      data: day
-    });
+    successResponse(res, { data: day });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -96,20 +74,14 @@ exports.getDayByDate = async (req, res) => {
   try {
     const dateParam = req.params.date;
     
-    // 验证日期格式是否有效
     if (!dateUtils.isValidDateString(dateParam)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid date format. Expected YYYY-MM-DD'
-      });
+      return validationErrorResponse(res, 'Invalid date format. Expected YYYY-MM-DD');
     }
     
     const day = await getDayByDate(dateParam, req.user.id);
     
-    // 如果找不到该日期的日计划，返回一个空的日计划对象
     if (!day) {
-      return res.status(200).json({
-        success: true,
+      return successResponse(res, {
         data: {
           date: dateParam,
           userId: req.user.id,
@@ -119,15 +91,9 @@ exports.getDayByDate = async (req, res) => {
       });
     }
     
-    res.status(200).json({
-      success: true,
-      data: day
-    });
+    successResponse(res, { data: day });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -136,7 +102,6 @@ exports.getDayByDate = async (req, res) => {
 // @access  Private
 exports.createOrUpdateDay = async (req, res) => {
   try {
-    // 确保创建的日计划与当前用户关联
     const dayData = {
       ...req.body,
       userId: req.user.id
@@ -144,24 +109,16 @@ exports.createOrUpdateDay = async (req, res) => {
     
     const day = await createOrUpdateDay(dayData);
     
-    // 检查是否删除了条目
     if (day.deleted) {
-      return res.status(200).json({
-        success: true,
+      return successResponse(res, {
         data: null,
         message: 'Day entry deleted due to empty content'
       });
     }
     
-    res.status(201).json({
-      success: true,
-      data: day
-    });
+    createdResponse(res, { data: day });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -173,40 +130,25 @@ exports.updateDay = async (req, res) => {
     const existingDay = await getDayById(req.params.id);
     
     if (!existingDay) {
-      return res.status(404).json({
-        success: false,
-        message: 'Day not found'
-      });
+      return notFoundResponse(res, 'Day not found');
     }
     
-    // 确保日计划属于当前用户
     if (existingDay.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this day'
-      });
+      return errorResponse(res, 'Not authorized to update this day', 403);
     }
     
     const day = await createOrUpdateDay({ ...req.body, id: req.params.id });
     
-    // 检查是否删除了条目
     if (day.deleted) {
-      return res.status(200).json({
-        success: true,
+      return successResponse(res, {
         data: null,
         message: 'Day entry deleted due to empty content'
       });
     }
     
-    res.status(200).json({
-      success: true,
-      data: day
-    });
+    successResponse(res, { data: day });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -218,31 +160,18 @@ exports.deleteDay = async (req, res) => {
     const existingDay = await getDayById(req.params.id);
     
     if (!existingDay) {
-      return res.status(404).json({
-        success: false,
-        message: 'Day not found'
-      });
+      return notFoundResponse(res, 'Day not found');
     }
     
-    // 确保日计划属于当前用户
     if (existingDay.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this day'
-      });
+      return errorResponse(res, 'Not authorized to delete this day', 403);
     }
     
     const day = await deleteDay(req.params.id);
     
-    res.status(200).json({
-      success: true,
-      data: {}
-    });
+    successResponse(res, { data: {} });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    errorResponse(res, error.message);
   }
 };
 
@@ -254,24 +183,44 @@ exports.searchNotes = async (req, res) => {
     const { keyword } = req.query;
     
     if (!keyword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Keyword is required'
-      });
+      return validationErrorResponse(res, 'Keyword is required');
     }
     
-    // 使用优化的搜索方法直接从数据库获取结果
     const results = await searchDaysByKeyword(keyword, req.user.id);
     
-    res.status(200).json({
-      success: true,
+    successResponse(res, {
       count: results.length,
       data: results
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
+    errorResponse(res, error.message);
+  }
+};
+
+// @desc    Batch update days
+// @route   POST /api/days/batch
+// @access  Private
+exports.batchUpdateDays = async (req, res) => {
+  try {
+    const { days } = req.body;
+    
+    if (!days || !Array.isArray(days)) {
+      return validationErrorResponse(res, 'Days array is required');
+    }
+    
+    const userDays = days.map(day => ({
+      ...day,
+      userId: req.user.id
+    }));
+    
+    const updatedDays = await batchUpdateDays(userDays);
+    
+    successResponse(res, {
+      count: updatedDays.length,
+      data: updatedDays
     });
+  } catch (error) {
+    console.error('批量更新API - 错误:', error);
+    errorResponse(res, error.message);
   }
 };

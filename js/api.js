@@ -39,6 +39,42 @@ const api = {
         this.removeRefreshToken();
     },
     
+    // 解析JSON响应的辅助函数
+    async parseJsonResponse(response) {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            return null;
+        }
+        
+        const responseText = await response.text();
+        
+        try {
+            return JSON.parse(responseText);
+        } catch (error) {
+            const trimmedText = responseText.trim();
+            const lastBraceIndex = trimmedText.lastIndexOf('}');
+            if (lastBraceIndex !== -1) {
+                const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
+                return JSON.parse(cleanedText);
+            }
+            throw new Error('Invalid JSON response: ' + error.message);
+        }
+    },
+    
+    // 解析错误消息的辅助函数
+    async parseErrorMessage(response, defaultMessage = '请求失败') {
+        try {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const errorText = await response.text();
+                const error = JSON.parse(errorText);
+                return error.message || defaultMessage;
+            }
+        } catch (e) {
+        }
+        return defaultMessage;
+    },
+    
     // 通用请求方法
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
@@ -75,57 +111,10 @@ const api = {
                     });
                     
                     if (!retryResponse.ok) {
-                        // 尝试解析错误响应，但如果响应体为空则使用默认错误消息
-            let errorMessage = '请求失败';
-            try {
-                const contentType = retryResponse.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const responseText = await retryResponse.text();
-                    // 处理可能的非标准JSON响应
-                    try {
-                        // 尝试直接解析
-                        const error = JSON.parse(responseText);
-                        errorMessage = error.message || errorMessage;
-                    } catch (parseError) {
-                        // 如果解析失败，尝试清理可能的额外字符
-                        const trimmedText = responseText.trim();
-                        // 查找最后一个 } 的位置
-                        const lastBraceIndex = trimmedText.lastIndexOf('}');
-                        if (lastBraceIndex !== -1) {
-                            const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
-                            const error = JSON.parse(cleanedText);
-                            errorMessage = error.message || errorMessage;
-                        }
-                    }
-                }
-            } catch (e) {
-                // 如果解析JSON失败，使用默认错误消息
-            }
-                        throw new Error(errorMessage);
+                        throw new Error(await this.parseErrorMessage(retryResponse, '请求失败'));
                     }
                     
-                    // 尝试解析成功响应，但如果响应体为空则返回null
-                    const contentType = retryResponse.headers.get('content-type');
-                    if (contentType && contentType.includes('application/json')) {
-                        const responseText = await retryResponse.text();
-                        // 处理可能的非标准JSON响应
-                        try {
-                            // 尝试直接解析
-                            return JSON.parse(responseText);
-                        } catch (error) {
-                            // 如果解析失败，尝试清理可能的额外字符
-                            const trimmedText = responseText.trim();
-                            // 查找最后一个 } 的位置
-                            const lastBraceIndex = trimmedText.lastIndexOf('}');
-                            if (lastBraceIndex !== -1) {
-                                const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
-                                return JSON.parse(cleanedText);
-                            }
-                            throw new Error('Invalid JSON response: ' + error.message);
-                        }
-                    } else {
-                        return null;
-                    }
+                    return await this.parseJsonResponse(retryResponse);
                 }
             } catch (refreshError) {
                 // 刷新令牌也过期或无效，需要重新登录
@@ -145,42 +134,10 @@ const api = {
         
         // 处理其他错误
         if (!response.ok) {
-            // 尝试解析错误响应，但如果响应体为空则使用默认错误消息
-            let errorMessage = '请求失败';
-            try {
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const error = await response.json();
-                    errorMessage = error.message || errorMessage;
-                }
-            } catch (e) {
-                // 如果解析JSON失败，使用默认错误消息
-            }
-            throw new Error(errorMessage);
+            throw new Error(await this.parseErrorMessage(response, '请求失败'));
         }
         
-        // 尝试解析成功响应，但如果响应体为空则返回null
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-            const responseText = await response.text();
-            // 处理可能的非标准JSON响应
-            try {
-                // 尝试直接解析
-                return JSON.parse(responseText);
-            } catch (error) {
-                // 如果解析失败，尝试清理可能的额外字符
-                const trimmedText = responseText.trim();
-                // 查找最后一个 } 的位置
-                const lastBraceIndex = trimmedText.lastIndexOf('}');
-                if (lastBraceIndex !== -1) {
-                    const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
-                    return JSON.parse(cleanedText);
-                }
-                throw new Error('Invalid JSON response: ' + error.message);
-            }
-        } else {
-            return null;
-        }
+        return await this.parseJsonResponse(response);
     },
     
     // 刷新访问令牌
@@ -209,105 +166,6 @@ const api = {
         } catch (error) {
             throw new Error('刷新令牌失败: ' + error.message);
         }
-    },
-    
-    // 认证相关API
-    // 用户注册
-    async register(userData) {
-        const response = await api.request('/auth/register', {
-            method: 'POST',
-            body: JSON.stringify(userData)
-        });
-        
-        // 保存token和刷新令牌
-        if (response.token) {
-            api.setToken(response.token);
-        }
-        
-        if (response.refreshToken) {
-            api.setRefreshToken(response.refreshToken);
-        }
-        
-        return response;
-    },
-    
-    // 用户登录
-    async login(credentials) {
-        const response = await api.request('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify(credentials)
-        });
-        
-        // 保存token和刷新令牌
-        if (response.token) {
-            api.setToken(response.token);
-        }
-        
-        if (response.refreshToken) {
-            api.setRefreshToken(response.refreshToken);
-        }
-        
-        return response;
-    },
-    
-    // 获取当前用户信息
-    async getMe() {
-        return await this.request('/auth/me');
-    },
-    
-    // 登出
-    async logout() {
-        try {
-            const refreshToken = this.getRefreshToken();
-            await this.request('/auth/logout', {
-                method: 'POST',
-                body: JSON.stringify({ refreshToken })
-            });
-        } catch (error) {
-            // 请求失败，但finally块会处理清理工作
-        } finally {
-            // 无论请求是否成功，都清除本地令牌
-            this.removeTokens();
-        }
-    },
-    
-    // 目标相关API
-    async getGoals() {
-        return await this.goals.getAll();
-    },
-    
-    async createGoal(goalData) {
-        return await this.goals.create(goalData);
-    },
-    
-    async updateGoal(id, goalData) {
-        return await this.goals.update(id, goalData);
-    },
-    
-    async deleteGoal(id) {
-        return await this.goals.delete(id);
-    },
-    
-    async updateGoalOrder(goalIds) {
-        return await this.goals.updateOrder(goalIds);
-    },
-    
-    // 日计划相关API
-    async getDays(startDate, endDate) {
-        return await this.days.getAll(startDate, endDate);
-    },
-    
-    async getDayByDate(date) {
-        return await this.days.getByDate(date);
-    },
-    
-    async createOrUpdateDay(dayData) {
-        return await this.days.createOrUpdate(dayData);
-    },
-    
-    // 搜索备注
-    async searchNotes(searchParams) {
-        return await this.days.searchNotes(searchParams);
     },
     
     // 嵌套对象保持兼容性
@@ -370,6 +228,23 @@ const api = {
                 api.removeTokens();
             }
         }
+    },
+    
+    // 顶层认证方法（向后兼容）
+    async login(credentials) {
+        return await this.auth.login(credentials);
+    },
+    
+    async register(userData) {
+        return await this.auth.register(userData);
+    },
+    
+    async logout() {
+        return await this.auth.logout();
+    },
+    
+    async getMe() {
+        return await this.auth.getMe();
     },
     
     // 目标相关API
@@ -446,6 +321,60 @@ const api = {
             const query = `?keyword=${encodeURIComponent(keyword)}`;
             
             return await api.request(`/days/search${query}`);
+        },
+        
+        // 批量更新日计划
+        async batchUpdate(days) {
+            return await api.request('/days/batch', {
+                method: 'POST',
+                body: JSON.stringify({ days })
+            });
         }
+    },
+    
+    // 顶层目标方法（向后兼容）
+    async getGoals() {
+        return await this.goals.getAll();
+    },
+    
+    async getGoalById(id) {
+        return await this.goals.getById(id);
+    },
+    
+    async createGoal(goalData) {
+        return await this.goals.create(goalData);
+    },
+    
+    async updateGoal(id, goalData) {
+        return await this.goals.update(id, goalData);
+    },
+    
+    async deleteGoal(id) {
+        return await this.goals.delete(id);
+    },
+    
+    async updateGoalOrder(goalIds) {
+        return await this.goals.updateOrder(goalIds);
+    },
+    
+    // 顶层日计划方法（向后兼容）
+    async getDays(startDate, endDate) {
+        return await this.days.getAll(startDate, endDate);
+    },
+    
+    async getDayByDate(date) {
+        return await this.days.getByDate(date);
+    },
+    
+    async createOrUpdateDay(dayData) {
+        return await this.days.createOrUpdate(dayData);
+    },
+    
+    async searchNotes(keyword) {
+        return await this.days.searchNotes({ keyword });
+    },
+    
+    async batchUpdateDays(days) {
+        return await this.days.batchUpdate(days);
     }
 };

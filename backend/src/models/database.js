@@ -58,6 +58,11 @@ const deleteGoal = async (id) => {
   return await fileDB.goals.delete(id);
 };
 
+const reorderGoals = async (goalIds) => {
+  await ensureDBInitialized();
+  return await fileDB.goals.reorder(goalIds);
+};
+
 // 获取所有日计划
 const getAllDays = async () => {
   await ensureDBInitialized();
@@ -100,6 +105,12 @@ const deleteDay = async (id) => {
   return await fileDB.days.delete(id);
 };
 
+// 批量更新日计划
+const batchUpdateDays = async (days) => {
+  await ensureDBInitialized();
+  return await fileDB.days.batchUpdate(days);
+};
+
 // 刷新令牌相关函数
 // 保存刷新令牌
 const saveRefreshToken = async (token, userId) => {
@@ -125,6 +136,12 @@ const deleteAllUserRefreshTokens = async (userId) => {
   return await fileDB.refreshTokens.deleteAllByUserId(userId);
 };
 
+// 清理过期的刷新令牌
+const cleanExpiredRefreshTokens = async (maxAgeDays = 7) => {
+  await ensureDBInitialized();
+  return await fileDB.refreshTokens.cleanExpiredTokens(maxAgeDays);
+};
+
 module.exports = {
   findUserByEmail,
   findUserById,
@@ -134,6 +151,7 @@ module.exports = {
   createGoal,
   updateGoal,
   deleteGoal,
+  reorderGoals,
   getAllDays,
   getDaysByDateRange,
   searchDaysByKeyword,
@@ -141,8 +159,10 @@ module.exports = {
   getDayByDate,
   createOrUpdateDay,
   deleteDay,
+  batchUpdateDays,
   saveRefreshToken,
   findRefreshToken,
   deleteRefreshToken,
-  deleteAllUserRefreshTokens
+  deleteAllUserRefreshTokens,
+  cleanExpiredRefreshTokens
 };

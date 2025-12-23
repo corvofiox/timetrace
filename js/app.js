@@ -75,7 +75,7 @@ const reorderQueue = {
         this.operations.push({
             ...operation,
             timestamp: Date.now(),
-            id: this.generateId()
+            id: utils.generateId()
         });
         
         // 保存队列到本地存储
@@ -88,11 +88,6 @@ const reorderQueue = {
         if (!this.isProcessing) {
             this.processQueue();
         }
-    },
-    
-    // 生成唯一ID
-    generateId() {
-        return `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     },
     
     // 处理队列中的操作
@@ -844,7 +839,7 @@ const calendar = {
         // 保存当前月份状态
         appData.saveCurrentMonth();
         
-        loadData().then(() => {
+        loadDays().then(() => {
             calendar.render();
         });
     },
@@ -860,7 +855,7 @@ const calendar = {
         // 保存当前月份状态
         appData.saveCurrentMonth();
         
-        loadData().then(() => {
+        loadDays().then(() => {
             calendar.render();
         });
     },
@@ -874,7 +869,7 @@ const calendar = {
         // 保存当前月份状态
         appData.saveCurrentMonth();
         
-        loadData().then(() => {
+        loadDays().then(() => {
             calendar.render();
         });
     }
@@ -1771,7 +1766,7 @@ const chart = {
             // 按月计算
             for (let month = 0; month < 12; month++) {
                 const monthStart = new Date(startDate.getFullYear(), month, 1);
-                const monthEnd = new Date(startDate.getFullYear(), month, dateUtils.getDaysInMonth(startDate.getFullYear(), month));
+                const monthEnd = new Date(startDate.getFullYear(), month, utils.getDaysInMonth(startDate.getFullYear(), month));
                 data.push(chart.calculateOverallCompletionRateForPeriod(monthStart, monthEnd));
             }
         } else {
@@ -2226,38 +2221,38 @@ function showApp() {
     });
 }
 
-// 加载数据
-function loadData() {
-    // 加载目标
-    const goalsPromise = api.getGoals()
+// 加载目标数据
+function loadGoals() {
+    return api.getGoals()
         .then(response => {
             appData.goals = response.data || [];
         })
         .catch(error => {
-            appData.goals = []; // 确保goals始终是数组
+            appData.goals = [];
         });
-    
-    // 加载当前月份的日计划
-    // 使用getSafeDateRange确保正确处理月末日期（包括31日）
+}
+
+// 加载日计划数据
+function loadDays() {
     const dateRange = utils.getSafeDateRange(appData.currentYear, appData.currentMonth);
     const startDate = dateRange.startDate;
     const endDate = dateRange.endDate;
     
-    const daysPromise = api.getDays(startDate, endDate)
+    return api.getDays(startDate, endDate)
         .then(response => {
-            // 不要重置整个dailyPlans对象，只更新当前月份的数据
             const days = response.data || [];
             days.forEach(day => {
                 appData.dailyPlans[day.date] = day;
             });
         })
         .catch(error => {
-            // 不要重置整个dailyPlans对象，保持现有数据
             console.error('加载日计划失败:', error);
         });
-    
-    // 返回Promise，等待所有数据加载完成
-    return Promise.all([goalsPromise, daysPromise]);
+}
+
+// 加载数据（初始加载时使用）
+function loadData() {
+    return Promise.all([loadGoals(), loadDays()]);
 }
 
 // 绑定事件
@@ -2327,7 +2322,7 @@ function bindEvents() {
     
     // 点击其他地方关闭下拉菜单
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
+        if (!e.target.closest('.dropdown') && !e.target.closest('.modal')) {
             elements.functionsDropdown.classList.remove('show');
         }
     });
@@ -3145,40 +3140,34 @@ const batchAddTask = {
     
     // 执行批量操作
     async executeBatchOperation(clearExisting, dates) {
-        // 显示加载状态
         const saveButton = elements.batchAddSaveBtn;
         const originalText = saveButton.textContent;
         saveButton.textContent = '保存中...';
         saveButton.disabled = true;
         
         try {
-            // 准备批量请求数据
-            const batchRequests = [];
+            const sortedDates = dates.sort();
+            const startDate = sortedDates[0];
+            const endDate = sortedDates[sortedDates.length - 1];
             
-            // 为每个日期准备请求数据
-            for (const date of dates) {
-                let dailyPlan;
+            let existingDays = [];
+            try {
+                const response = await api.getDays(startDate, endDate);
+                existingDays = response.data || [];
+            } catch (error) {
+                console.error('获取现有数据失败:', error);
+            }
+            
+            const batchRequests = [];
+            const existingDaysMap = new Map();
+            existingDays.forEach(day => {
+                existingDaysMap.set(day.date, day);
+            });
+            
+            for (const date of sortedDates) {
+                let dailyPlan = existingDaysMap.get(date);
                 
-                try {
-                    // 尝试获取现有日计划
-                    const response = await api.getDayByDate(date);
-                    dailyPlan = response.data || response;
-                    
-                    // 确保dailyPlan有正确的结构
-                    if (!dailyPlan) {
-                        dailyPlan = {
-                            date: date,
-                            summary: '',
-                            tasks: []
-                        };
-                    }
-                    
-                    // 确保tasks数组存在
-                    if (!dailyPlan.tasks || !Array.isArray(dailyPlan.tasks)) {
-                        dailyPlan.tasks = [];
-                    }
-                } catch (error) {
-                    // 如果不存在，创建新的日计划
+                if (!dailyPlan) {
                     dailyPlan = {
                         date: date,
                         summary: '',
@@ -3186,12 +3175,14 @@ const batchAddTask = {
                     };
                 }
                 
-                // 如果需要清除现有任务
+                if (!dailyPlan.tasks || !Array.isArray(dailyPlan.tasks)) {
+                    dailyPlan.tasks = [];
+                }
+                
                 if (clearExisting) {
                     dailyPlan.tasks = [];
                 }
                 
-                // 添加新任务
                 if (this.tasks.length > 0) {
                     this.tasks.forEach(task => {
                         dailyPlan.tasks.push({
@@ -3203,25 +3194,47 @@ const batchAddTask = {
                     });
                 }
                 
-                // 添加到批量请求列表
-                batchRequests.push(api.createOrUpdateDay(dailyPlan));
+                const isSummaryEmpty = !dailyPlan.summary || dailyPlan.summary.trim() === '';
+                const areTasksEmpty = !dailyPlan.tasks || dailyPlan.tasks.length === 0;
+                
+                // 对于批量清除操作，始终发送所有选中的日期
+                // 对于批量添加操作，只发送有内容的日期
+                if (clearExisting || !isSummaryEmpty || !areTasksEmpty) {
+                    batchRequests.push(dailyPlan);
+                }
             }
             
-            // 并行执行所有请求
-            const results = await Promise.all(batchRequests);
+            if (batchRequests.length === 0) {
+                alert('没有需要更新的数据');
+                return;
+            }
             
-            // 更新本地缓存
-            dates.forEach((date, index) => {
-                appData.dailyPlans[date] = results[index].data || results[index];
+            const response = await api.batchUpdateDays(batchRequests);
+            
+            response.data.forEach(day => {
+                appData.dailyPlans[day.date] = day;
             });
             
-            // 刷新日历
-            calendar.render();
+            if (clearExisting) {
+                sortedDates.forEach(date => {
+                    if (!appData.dailyPlans[date]) {
+                        appData.dailyPlans[date] = {
+                            date: date,
+                            summary: '',
+                            tasks: []
+                        };
+                    } else {
+                        appData.dailyPlans[date].tasks = [];
+                        if (!response.data.find(d => d.date === date)) {
+                            appData.dailyPlans[date].summary = '';
+                        }
+                    }
+                });
+            }
             
-            // 关闭模态框
+            calendar.render();
             this.close();
             
-            // 显示成功消息
             let successMessage = `成功对 ${dates.length} 个日期进行了操作：\n`;
             if (clearExisting) {
                 successMessage += `- 清除了现有任务\n`;
@@ -3232,9 +3245,9 @@ const batchAddTask = {
             alert(successMessage);
             
         } catch (error) {
+            console.error('批量操作失败:', error);
             alert('批量添加任务失败: ' + (error.message || '未知错误'));
         } finally {
-            // 恢复按钮状态
             saveButton.textContent = originalText;
             saveButton.disabled = false;
         }
@@ -3272,7 +3285,7 @@ const monthPicker = {
             appData.currentYear = this.selectedYear;
             appData.currentMonth = this.selectedMonth;
             calendar.render();
-            loadData();
+            loadDays();
         }
     },
     
@@ -3381,8 +3394,8 @@ const monthPicker = {
         // 重新渲染日历
         calendar.render();
         
-        // 重新加载数据
-        loadData();
+        // 重新加载日计划数据
+        loadDays();
     }
 };
 
@@ -3419,12 +3432,8 @@ const notesSearch = {
         elements.searchResultsContainer.innerHTML = '<div class="search-loading">搜索中...</div>';
         
         try {
-            // 调用API搜索备注
-            const response = await api.searchNotes({
-                keyword
-            });
+            const response = await api.searchNotes(keyword);
             
-            // 使用直接引用替代this来保持上下文
             notesSearch.displayResults(response.data);
         } catch (error) {
             elements.searchResultsContainer.innerHTML = `<div class="no-results">搜索失败: ${error.message}</div>`;
@@ -3505,7 +3514,6 @@ const notesSearch = {
     async loadMonthData(year, month) {
         // 检查缓存中是否已有该月份数据
         if (dataCache.isMonthCached(year, month)) {
-            console.log(`使用缓存数据: ${year}年${month + 1}月`);
             const cachedData = dataCache.getCachedMonthData(year, month);
             
             // 将缓存数据加载到应用数据中
@@ -3531,7 +3539,6 @@ const notesSearch = {
             
             // 缓存该月份数据
             dataCache.cacheMonthData(year, month, days);
-            console.log(`已缓存数据: ${year}年${month + 1}月，共${days.length}条记录`);
         } catch (error) {
             // 加载月份数据失败: error
         }

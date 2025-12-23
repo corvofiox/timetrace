@@ -22,28 +22,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-// 环境检测函数 - 直接在setup.js中实现，避免不必要的依赖
-function isDockerEnvironment() {
-  // 检查 /.dockerenv 文件是否存在，这是最可靠的Docker环境检测方法
-  return fs.existsSync('/.dockerenv');
-}
-
-// 获取数据目录路径 - 直接在setup.js中实现
-function getDataDir() {
-  // 如果环境变量中已设置DATA_DIR，则使用它
-  if (process.env.DATA_DIR) {
-    return process.env.DATA_DIR;
-  }
-  
-  // 根据环境自动选择默认路径
-  if (isDockerEnvironment()) {
-    // Docker环境中的默认路径
-    return '/app/data';
-  } else {
-    // 本地开发环境中的默认路径
-    return path.join(__dirname, 'backend', 'src', 'data');
-  }
-}
+const { isDockerEnvironment, getDataDir, getProjectRoot, getEnvPath } = require('./backend/src/utils/env');
 
 // 颜色输出函数
 const colors = {
@@ -66,17 +45,10 @@ const args = process.argv.slice(2);
 const initOnly = args.includes('--init-only');
 const noKeys = args.includes('--no-keys');
 
-// 使用统一的环境检测
 const isDocker = isDockerEnvironment();
-
-// 项目根目录
-const projectRoot = isDocker ? '/app' : __dirname;
-
-// 获取数据目录路径 - 使用统一函数
-const dataDir = getDataDir();  
-
-// 获取.env文件路径 - 确保在Docker环境中使用正确的路径
-const envPath = isDocker ? '/app/data/.env' : path.join(dataDir, '.env');
+const projectRoot = getProjectRoot();
+const dataDir = getDataDir();
+const envPath = getEnvPath();
 
 // 默认.env模板
 const envTemplate = `# 环境变量配置文件
