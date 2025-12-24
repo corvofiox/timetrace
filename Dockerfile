@@ -13,8 +13,8 @@ RUN cd backend && npm ci --only=production
 # 生产阶段
 FROM node:18-alpine AS production
 
-# 安装Python、OpenSSL和curl用于启动前端服务器、生成密钥和健康检查
-RUN apk add --no-cache python3 openssl curl
+# 安装Python、OpenSSL、curl和dos2unix用于启动前端服务器、生成密钥、健康检查和转换行尾符
+RUN apk add --no-cache python3 openssl curl dos2unix
 
 # 设置工作目录
 WORKDIR /app
@@ -40,8 +40,8 @@ COPY setup.js /app/setup.js
 COPY start-services.js /app/start-services.js
 COPY start.sh /app/start.sh
 
-# 给start.sh添加执行权限，并确保使用LF换行符
-RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
+# 转换start.sh的行尾符（从CRLF到LF）并添加执行权限
+RUN dos2unix /app/start.sh && chmod +x /app/start.sh
 
 # 创建数据目录（.env文件通过卷挂载从宿主机映射）
 RUN mkdir -p /app/data
