@@ -548,27 +548,22 @@ const utils = {
     // 计算连续天数
     calculateStreak() {
         let streak = 0;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
         
         for (let i = 0; i < 365; i++) {
-            const checkDate = new Date(today);
-            checkDate.setDate(today.getDate() - i);
+            const checkDate = new Date(yesterday);
+            checkDate.setDate(yesterday.getDate() - i);
             const dateStr = utils.formatDate(checkDate);
             
             if (appData.dailyPlans[dateStr] && appData.dailyPlans[dateStr].tasks) {
                 const tasks = appData.dailyPlans[dateStr].tasks;
                 if (tasks.length > 0 && tasks.every(task => task.completed)) {
                     streak++;
-                } else if (i === 0 && tasks.length > 0) {
-                    // 如果今天有任务但未全部完成，不算连续
-                    break;
                 } else {
                     break;
                 }
-            } else if (i === 0) {
-                // 如果今天没有任务，不算连续
-                break;
             } else {
                 break;
             }
@@ -2641,7 +2636,9 @@ const batchAddTask = {
     selectedDates: [],
     currentMonth: new Date().getMonth(),
     currentYear: new Date().getFullYear(),
-    tasks: [], // 存储任务列表
+    tasks: [],
+    debounceTimer: null,
+    previewLimit: 50, // 存储任务列表
     
     // 打开批量添加任务模态框
     open() {
@@ -2980,8 +2977,21 @@ const batchAddTask = {
         return dates;
     },
     
-    // 更新预览
-    async updatePreview() {
+    // 更新预览（带防抖）
+    updatePreview() {
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
+        
+        return new Promise((resolve) => {
+            this.debounceTimer = setTimeout(() => {
+                this._doUpdatePreview().then(resolve).catch(resolve);
+            }, 300);
+        });
+    },
+    
+    // 实际执行预览更新
+    async _doUpdatePreview() {
         const dates = this.getSelectedDates();
         const clearExisting = elements.batchClearExisting.checked;
         
@@ -2997,7 +3007,6 @@ const batchAddTask = {
         
         let html = `<p>将对 <strong>${dates.length}</strong> 个日期进行以下操作：</p>`;
         
-        // 显示操作类型
         if (clearExisting) {
             html += '<div class="preview-operation"><i class="ri-delete-bin-line"></i> 清除这些日期的现有任务</div>';
         }
@@ -3005,7 +3014,6 @@ const batchAddTask = {
             html += `<div class="preview-operation"><i class="ri-add-line"></i> 添加 <strong>${this.tasks.length}</strong> 个新任务</div>`;
         }
         
-        // 显示前几个日期的预览
         const previewDates = dates.slice(0, 3);
         html += '<div class="preview-date-group">';
         html += '<h5>预览日期:</h5>';
@@ -3018,80 +3026,138 @@ const batchAddTask = {
         }
         html += '</ul></div>';
         
-        // 显示将被清除的任务（如果有）
         if (clearExisting) {
             html += '<div class="preview-date-group">';
             html += '<h5><i class="ri-delete-bin-line"></i> 将被清除的任务:</h5>';
             
-            // 获取所有选中日期的任务
-            if (previewDates.length > 0) {
+            if (dates.length > 0) {
+                if (dates.length > this.previewLimit) {
+                    html += `<p class="preview-note">日期数量较多（${dates.length}个），仅预览前${this.previewLimit}个日期的任务</p>`;
+                }
+                
+                const datesToCheck = dates.slice(0, this.previewLimit);
+                
                 try {
+                    html += '<div class="preview-loading">加载中...</div>';
+                    elements.batchPreviewContent.innerHTML = html;
+                    
                     const allTasks = [];
                     const allDatesWithTasks = [];
                     
-                    // 并行获取所有日期的任务数据
-                    const promises = dates.map(async (date) => {
-                        try {
-                            const dayData = await api.getDayByDate(date);
-                            if (dayData && dayData.data && dayData.data.tasks && dayData.data.tasks.length > 0) {
-                                allDatesWithTasks.push(date);
-                                dayData.data.tasks.forEach(task => {
-                                    allTasks.push({
-                                        date: date,
-                                        title: task.title
-                                    });
+                    const startDate = datesToCheck[0];
+                    const endDate = datesToCheck[datesToCheck.length - 1];
+                    
+                    let existingDays = [];
+                    try {
+                        const response = await api.getDays(startDate, endDate);
+                        existingDays = response.data || [];
+                    } catch (error) {
+                        console.error('获取现有数据失败:', error);
+                    }
+                    
+                    const existingDaysMap = new Map();
+                    existingDays.forEach(day => {
+                        existingDaysMap.set(day.date, day);
+                    });
+                    
+                    datesToCheck.forEach(date => {
+                        const dayData = existingDaysMap.get(date);
+                        if (dayData && dayData.tasks && dayData.tasks.length > 0) {
+                            allDatesWithTasks.push(date);
+                            dayData.tasks.forEach(task => {
+                                allTasks.push({
+                                    date: date,
+                                    title: task.title
                                 });
-                            }
-                        } catch (error) {
-                            // 批量任务处理失败，跳过此任务
-                            // 处理任务时出错: error
+                            });
                         }
                     });
                     
-                    // 等待所有请求完成
-                    await Promise.all(promises);
+                    html = `<p>将对 <strong>${dates.length}</strong> 个日期进行以下操作：</p>`;
                     
-                    if (allTasks.length > 0) {
-                        // 按任务标题分组
-                        const tasksByTitle = {};
-                        allTasks.forEach(task => {
-                            if (!tasksByTitle[task.title]) {
-                                tasksByTitle[task.title] = [];
-                            }
-                            tasksByTitle[task.title].push(task.date);
-                        });
+                    if (clearExisting) {
+                        html += '<div class="preview-operation"><i class="ri-delete-bin-line"></i> 清除这些日期的现有任务</div>';
+                    }
+                    if (this.tasks.length > 0) {
+                        html += `<div class="preview-operation"><i class="ri-add-line"></i> 添加 <strong>${this.tasks.length}</strong> 个新任务</div>`;
+                    }
+                    
+                    html += '<div class="preview-date-group">';
+                    html += '<h5>预览日期:</h5>';
+                    html += '<ul class="preview-task-list">';
+                    previewDates.forEach(date => {
+                        html += `<li>${date}</li>`;
+                    });
+                    if (dates.length > 3) {
+                        html += `<li>... 还有 ${dates.length - 3} 个日期</li>`;
+                    }
+                    html += '</ul></div>';
+                    
+                    if (clearExisting) {
+                        html += '<div class="preview-date-group">';
+                        html += '<h5><i class="ri-delete-bin-line"></i> 将被清除的任务:</h5>';
                         
-                        html += '<ul class="preview-task-list removed-tasks">';
-                        const taskTitles = Object.keys(tasksByTitle);
-                        const displayTasks = taskTitles.slice(0, 3);
-                        
-                        displayTasks.forEach(title => {
-                            const dates = tasksByTitle[title];
-                            const dateStr = dates.length > 3 
-                                ? `(共${dates.length}个日期)`
-                                : `(${dates.join(', ')})`;
-                            html += `<li>${title} <span class="task-date">${dateStr}</span></li>`;
-                        });
-                        
-                        if (taskTitles.length > 3) {
-                            html += `<li>... 还有 ${taskTitles.length - 3} 个任务</li>`;
+                        if (dates.length > this.previewLimit) {
+                            html += `<p class="preview-note">日期数量较多（${dates.length}个），仅预览前${this.previewLimit}个日期的任务</p>`;
                         }
                         
-                        html += '</ul>';
-                        html += `<p class="preview-note">* 共找到 ${allDatesWithTasks.length} 个日期的 ${allTasks.length} 个任务将被清除</p>`;
-                    } else {
-                        html += '<p class="preview-note">所选日期暂无任务</p>';
+                        if (allTasks.length > 0) {
+                            const tasksByTitle = {};
+                            allTasks.forEach(task => {
+                                if (!tasksByTitle[task.title]) {
+                                    tasksByTitle[task.title] = [];
+                                }
+                                tasksByTitle[task.title].push(task.date);
+                            });
+                            
+                            html += '<ul class="preview-task-list removed-tasks">';
+                            const taskTitles = Object.keys(tasksByTitle);
+                            const displayTasks = taskTitles.slice(0, 3);
+                            
+                            displayTasks.forEach(title => {
+                                const taskDates = tasksByTitle[title];
+                                const dateStr = taskDates.length > 3 
+                                    ? `(共${taskDates.length}个日期)`
+                                    : `(${taskDates.join(', ')})`;
+                                html += `<li>${title} <span class="task-date">${dateStr}</span></li>`;
+                            });
+                            
+                            if (taskTitles.length > 3) {
+                                html += `<li>... 还有 ${taskTitles.length - 3} 个任务</li>`;
+                            }
+                            
+                            html += '</ul>';
+                            
+                            const totalNote = dates.length > this.previewLimit 
+                                ? `* 在前${this.previewLimit}个日期中找到 ${allDatesWithTasks.length} 个日期的 ${allTasks.length} 个任务将被清除`
+                                : `* 共找到 ${allDatesWithTasks.length} 个日期的 ${allTasks.length} 个任务将被清除`;
+                            html += `<p class="preview-note">${totalNote}</p>`;
+                        } else {
+                            html += '<p class="preview-note">所选日期暂无任务</p>';
+                        }
+                        html += '</div>';
                     }
                 } catch (error) {
+                    html = `<p>将对 <strong>${dates.length}</strong> 个日期进行以下操作：</p>`;
+                    
+                    if (clearExisting) {
+                        html += '<div class="preview-operation"><i class="ri-delete-bin-line"></i> 清除这些日期的现有任务</div>';
+                    }
+                    if (this.tasks.length > 0) {
+                        html += `<div class="preview-operation"><i class="ri-add-line"></i> 添加 <strong>${this.tasks.length}</strong> 个新任务</div>`;
+                    }
+                    
+                    html += '<div class="preview-date-group">';
+                    html += '<h5><i class="ri-delete-bin-line"></i> 将被清除的任务:</h5>';
                     html += '<p class="preview-note">无法获取现有任务信息</p>';
+                    html += '</div>';
                 }
             } else {
                 html += '<p class="preview-note">请先选择日期</p>';
+                html += '</div>';
             }
-            html += '</div>';
         }
         
-        // 显示新任务预览
         if (this.tasks.length > 0) {
             html += '<div class="preview-date-group">';
             html += '<h5><i class="ri-add-line"></i> 将添加的新任务:</h5>';
