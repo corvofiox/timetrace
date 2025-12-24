@@ -45,7 +45,6 @@ const args = process.argv.slice(2);
 const initOnly = args.includes('--init-only');
 const noKeys = args.includes('--no-keys');
 
-const isDocker = isDockerEnvironment();
 const projectRoot = getProjectRoot();
 const dataDir = getDataDir();
 const envPath = getEnvPath();
@@ -222,7 +221,8 @@ async function startServices() {
   
   // 启动前端服务
   colorLog('🌐 启动前端服务...', 'yellow');
-  const frontendProcess = spawn('python', ['-m', 'http.server', '8000'], {
+  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+  const frontendProcess = spawn(pythonCommand, ['-m', 'http.server', '8000'], {
     cwd: projectRoot,
     stdio: 'pipe',
     detached: true

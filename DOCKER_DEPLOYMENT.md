@@ -21,6 +21,8 @@ cd Timetrace
 node setup.js --init-only
 ```
 
+**重要**: `setup.js` 仅负责初始化环境，不会启动服务。使用 `--init-only` 参数确保只进行环境准备。
+
 ### 3. 构建Docker镜像
 ```bash
 docker build -t timetrace:latest .
@@ -48,6 +50,12 @@ docker-compose up -d
 项目使用多阶段构建:
 1. **构建阶段**: 安装后端依赖
 2. **生产阶段**: 复制所有应用文件和依赖到最终镜像
+
+### 启动脚本
+- 容器使用 `start.sh` 作为启动入口
+- `start.sh` 自动调用 `setup.js` 进行环境检查，然后调用 `start-services.js` 启动服务
+- `start-services.js` 负责启动前端和后端服务
+- 支持健康检查和优雅关闭
 
 ### 端口映射
 - 3000: 后端API服务
@@ -129,3 +137,30 @@ services:
 ```
 
 **注意**: 使用 Docker Compose 前，请先运行 `node setup.js --init-only` 生成 `.env` 文件。`.env` 文件会被生成在 `backend/src/data` 目录中，与数据文件一起挂载到容器中。
+
+## 脚本说明
+
+### start.bat (Windows)
+- Windows 平台的启动入口
+- 自动调用 `setup.js --init-only` 进行环境检查（如果.env不存在）
+- 然后调用 `start-services.js` 启动服务
+- 支持 `--init-only` 参数仅初始化环境
+
+### start.sh (Linux/macOS/Docker)
+- Linux/macOS/Docker 平台的启动入口
+- 自动调用 `setup.js --init-only` 进行环境检查（如果.env不存在）
+- 然后调用 `start-services.js` 启动服务
+- 支持 `--init-only` 参数仅初始化环境
+
+### setup.js
+- 负责环境初始化
+- 创建数据目录和 `.env` 文件
+- 生成 JWT 密钥
+- 安装后端依赖
+- 使用 `--init-only` 参数时不会启动服务
+
+### start-services.js
+- 负责启动前端和后端服务
+- 自动检测环境（本地/Docker）
+- 健康检查确保服务正常启动
+- 支持优雅关闭

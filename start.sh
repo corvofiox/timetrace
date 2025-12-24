@@ -20,12 +20,31 @@ if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
     exit 1
 fi
 
-# 在Docker环境中，确保.env文件存在
-if [ ! -f "/app/data/.env" ]; then
-    echo "Docker环境中未找到.env文件，正在创建..."
+# 检查命令行参数
+if [ "$1" = "--init-only" ]; then
+    echo "仅初始化环境..."
+    node setup.js --init-only
+    exit 0
+fi
+
+# 检查.env文件是否存在
+# Docker环境: /app/data/.env
+# 本地环境: backend/src/data/.env
+if [ -f "/.dockerenv" ]; then
+    ENV_FILE="/app/data/.env"
+else
+    ENV_FILE="backend/src/data/.env"
+fi
+
+if [ -f "$ENV_FILE" ]; then
+    echo "环境配置文件已存在: $ENV_FILE"
+    echo "跳过初始化"
+else
+    echo "环境配置文件不存在，正在初始化..."
     node setup.js --init-only
 fi
 
-# 启动后端服务
-echo "启动后端服务..."
-cd /app/backend && node src/server.js
+# 启动服务
+echo ""
+echo "启动服务..."
+node start-services.js

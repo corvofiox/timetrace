@@ -120,14 +120,14 @@ async function startServices() {
   colorLog('🚀 启动 Timetrace 服务...', 'cyan');
   
   // 检查.env文件
-  const envPath = path.join(projectRoot, 'backend', 'src', 'data', '.env');
+  const envPath = getEnvPath();
   if (!fs.existsSync(envPath)) {
-    colorLog('❌ 错误: .env文件不存在，请先运行 start.bat --init-only', 'red');
+    colorLog('❌ 错误: .env文件不存在，请先运行 setup.js --init-only', 'red');
     process.exit(1);
   }
   
   // 创建数据目录
-  const dataDir = path.join(projectRoot, 'backend', 'src', 'data');
+  const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
@@ -189,7 +189,8 @@ async function startServices() {
   
   // 启动前端服务
   colorLog('🌐 启动前端服务...', 'yellow');
-  const frontendProcess = spawn('python', ['-m', 'http.server', '8000'], {
+  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+  const frontendProcess = spawn(pythonCommand, ['-m', 'http.server', '8000'], {
     cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false

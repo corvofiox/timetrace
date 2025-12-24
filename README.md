@@ -108,11 +108,11 @@
    
    打开浏览器访问：`http://localhost:8000`
 
-### 方式三：使用单一Docker镜像（推荐）
+### 方式三：使用Docker部署
 
 #### 环境要求
 - Docker
-- Docker Compose（可选）
+- Docker Compose
 
 #### 运行步骤
 
@@ -122,27 +122,32 @@
    cd Timetrace
    ```
 
-2. **使用Docker Compose启动服务**
+2. **初始化环境**
    ```bash
-   docker-compose -f docker-compose.all-in-one.yml up -d
+   node setup.js --init-only
+   ```
+
+3. **使用Docker Compose启动服务**
+   ```bash
+   docker-compose up -d
    ```
 
    或者直接使用Docker命令：
    ```bash
    # 构建镜像
-   docker build -f Dockerfile.all-in-one -t timetrace-app:latest .
+   docker build -t timetrace:latest .
    
    # 运行容器
-   docker run -d --name timetrace-app -p 3000:3000 -p 8000:8000 -v $(pwd)/data:/app/data timetrace-app:latest
+   docker run -d --name timetrace -p 3000:3000 -p 8000:8000 -v ./backend/src/data:/app/data timetrace:latest
    ```
 
-3. **访问应用**
+4. **访问应用**
    - 前端：`http://localhost:8000`
    - 后端API：`http://localhost:3000`
 
-4. **停止服务**
+5. **停止服务**
    ```bash
-   docker-compose -f docker-compose.all-in-one.yml down
+   docker-compose down
    ```
 
 #### 优势

@@ -33,10 +33,17 @@ COPY js ./js
 COPY libs ./libs
 
 # 复制启动脚本
+# setup.js: 环境初始化脚本（仅在需要时运行）
+# start-services.js: 服务启动脚本（启动前端和后端）
+# start.sh: Linux/macOS/Docker 启动入口（调用 setup.js 和 start-services.js）
 COPY setup.js /app/setup.js
+COPY start-services.js /app/start-services.js
 COPY start.sh /app/start.sh
 
-# 创建数据目录（但不初始化.env，因为会被卷挂载覆盖）
+# 给start.sh添加执行权限
+RUN chmod +x /app/start.sh
+
+# 创建数据目录（.env文件通过卷挂载从宿主机映射）
 RUN mkdir -p /app/data
 
 # 设置环境变量
@@ -47,8 +54,5 @@ ENV DATA_DIR=/app/data
 # 暴露端口
 EXPOSE 3000 8000
 
-# 确保脚本有正确的格式和执行权限
-RUN chmod +x /app/start.sh && sed -i 's/\r$//' /app/start.sh
-
 # 启动应用
-CMD ["/bin/sh", "/app/start.sh"]
+CMD ["/app/start.sh"]

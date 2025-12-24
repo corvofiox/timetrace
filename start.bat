@@ -31,9 +31,14 @@ if "%1"=="--init-only" (
     exit /b 0
 )
 
-REM Run setup script first to ensure environment is ready
-echo Checking environment...
-node setup.js --init-only --no-keys
+REM Check if .env file exists
+if exist "backend\src\data\.env" (
+    echo Environment configuration file exists: backend\src\data\.env
+    echo Skipping initialization
+) else (
+    echo Environment configuration file does not exist, initializing...
+    node setup.js --init-only
+)
 
 REM Start services
 echo.
