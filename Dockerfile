@@ -40,8 +40,8 @@ COPY setup.js /app/setup.js
 COPY start-services.js /app/start-services.js
 COPY start.sh /app/start.sh
 
-# 给start.sh添加执行权限
-RUN chmod +x /app/start.sh
+# 给start.sh添加执行权限，并确保使用LF换行符
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 
 # 创建数据目录（.env文件通过卷挂载从宿主机映射）
 RUN mkdir -p /app/data
