@@ -31,27 +31,7 @@ app.use(cors({
       : [];
     
     if (allowedOrigins.length === 0) {
-      const devOrigins = [
-        'http://localhost:8000',
-        'http://localhost:3000',
-        'http://127.0.0.1:8000',
-        'http://127.0.0.1:3000'
-      ];
-      if (devOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      const prodOrigins = [
-        'http://localhost:8000',
-        'http://localhost:3000',
-        'http://127.0.0.1:8000',
-        'http://127.0.0.1:3000'
-      ];
-      if (prodOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      return callback(new Error('CORS policy violation: origin not allowed'));
+      return callback(null, true);
     }
     
     if (allowedOrigins.includes(origin)) {
