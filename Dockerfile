@@ -55,4 +55,4 @@ ENV DATA_DIR=/app/data
 EXPOSE 3000 8000
 
 # 启动应用
-CMD ["/app/start.sh"]
+CMD ["sh", "/app/start.sh"]
