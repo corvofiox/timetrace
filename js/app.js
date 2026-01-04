@@ -1220,46 +1220,39 @@ const dayModal = {
         `;
         
         // 添加切换完成状态事件
-        taskItem.querySelector('.task-checkbox').addEventListener('click', () => {
-            // 获取当前任务的最新完成状态
+        taskItem.querySelector('.task-checkbox').addEventListener('click', async () => {
+            const dateStr = utils.formatDate(appData.selectedDate);
+            
             let currentCompleted = task.completed;
             
-            // 检查是否已经在待处理编辑列表中有更改
             const existingChange = appData.pendingTaskChanges.edited.find(
-                change => change.taskId === task.id
+                change => change.taskId === task.id && change.dateStr === dateStr
             );
             
-            // 如果有待处理的更改，使用待处理的完成状态
             if (existingChange) {
                 currentCompleted = existingChange.completed;
             }
             
-            // 切换完成状态
             const newCompleted = !currentCompleted;
             
-            // 添加到待处理编辑列表
             const editChange = {
                 taskId: task.id,
-                dateStr: utils.formatDate(appData.selectedDate),
+                dateStr: dateStr,
                 title: task.title,
                 description: task.description,
                 completed: newCompleted
             };
             
-            // 检查是否已经在待处理编辑列表中
             const existingIndex = appData.pendingTaskChanges.edited.findIndex(
-                change => change.taskId === task.id
+                change => change.taskId === task.id && change.dateStr === dateStr
             );
             
             if (existingIndex !== -1) {
-                // 更新现有的待处理编辑
                 appData.pendingTaskChanges.edited[existingIndex] = editChange;
             } else {
-                // 添加新的待处理编辑
                 appData.pendingTaskChanges.edited.push(editChange);
             }
             
-            // 添加视觉反馈
             const checkbox = taskItem.querySelector('.task-checkbox');
             const icon = checkbox.querySelector('i');
             
@@ -1273,7 +1266,82 @@ const dayModal = {
                 taskItem.classList.remove('completed');
             }
             
-            // 不调用updateUIWithPendingChanges，避免重新渲染导致事件监听器丢失
+            // 立即保存到后端
+            const existingDailyPlan = appData.dailyPlans[dateStr];
+            const dailyPlan = existingDailyPlan ? { ...existingDailyPlan } : { date: dateStr, summary: '', tasks: [] };
+            dailyPlan.date = dateStr;
+            dailyPlan.summary = elements.dailySummary.value;
+            
+            // 保留原始记录的 id 字段
+            if (existingDailyPlan && existingDailyPlan.id) {
+                dailyPlan.id = existingDailyPlan.id;
+            }
+            
+            // 确保任务数组是深拷贝
+            dailyPlan.tasks = [...(dailyPlan.tasks || [])];
+            
+            // 应用待处理的更改
+            dailyPlan.tasks = dailyPlan.tasks.filter(task => {
+                return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
+            });
+            
+            appData.pendingTaskChanges.edited.forEach(edit => {
+                if (edit.dateStr === dateStr) {
+                    const taskIndex = dailyPlan.tasks.findIndex(t => t.id === edit.taskId);
+                    if (taskIndex !== -1) {
+                        // 只更新明确提供的字段
+                        const updates = {};
+                        if (edit.title !== undefined) updates.title = edit.title;
+                        if (edit.description !== undefined) updates.description = edit.description;
+                        if (edit.completed !== undefined) updates.completed = edit.completed;
+                        
+                        dailyPlan.tasks[taskIndex] = {
+                            ...dailyPlan.tasks[taskIndex],
+                            ...updates
+                        };
+                    }
+                }
+            });
+            
+            appData.pendingTaskChanges.added.forEach(addition => {
+                if (addition.dateStr === dateStr) {
+                    const correspondingEdit = appData.pendingTaskChanges.edited.find(
+                        edit => edit.taskId === addition.id
+                    );
+                    
+                    dailyPlan.tasks.push({
+                        id: addition.id,
+                        title: addition.title,
+                        description: addition.description,
+                        completed: correspondingEdit ? correspondingEdit.completed : addition.completed
+                    });
+                }
+            });
+            
+            try {
+                const response = await api.createOrUpdateDay(dailyPlan);
+                const savedDay = response.data;
+                
+                if (response.message && response.message.includes('deleted due to empty content')) {
+                    delete appData.dailyPlans[dateStr];
+                } else {
+                    appData.dailyPlans[dateStr] = savedDay;
+                }
+                
+                appData.pendingTaskChanges.added = [];
+                appData.pendingTaskChanges.edited = [];
+                appData.pendingTaskChanges.deleted = [];
+                
+                const date = new Date(dateStr);
+                dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                
+                calendar.render();
+                stats.update();
+            } catch (error) {
+                console.error('保存失败:', error);
+                alert('保存失败: ' + (error.message || '未知错误'));
+            }
+            
         });
         
         // 添加编辑事件
@@ -3239,6 +3307,8 @@ const batchAddTask = {
                         summary: '',
                         tasks: []
                     };
+                } else {
+                    dailyPlan = { ...dailyPlan };
                 }
                 
                 if (!dailyPlan.tasks || !Array.isArray(dailyPlan.tasks)) {
@@ -3250,6 +3320,7 @@ const batchAddTask = {
                 }
                 
                 if (this.tasks.length > 0) {
+                    dailyPlan.tasks = [];
                     this.tasks.forEach(task => {
                         dailyPlan.tasks.push({
                             id: utils.generateId(),

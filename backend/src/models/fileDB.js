@@ -326,7 +326,13 @@ const days = {
     if (isSummaryEmpty && areTasksEmpty) {
       // 如果备注和任务都为空，删除现有条目（如果存在）
       if (existingDay) {
-        const index = allDays.findIndex(day => day.id === existingDay.id);
+        // 优先使用 id 查找，如果没有 id 则使用 date 和 userId 查找
+        let index;
+        if (existingDay.id) {
+          index = allDays.findIndex(day => day.id === existingDay.id);
+        } else {
+          index = allDays.findIndex(day => day.date === existingDay.date && day.userId === existingDay.userId);
+        }
         if (index !== -1) {
           allDays.splice(index, 1);
           await writeJsonFile(DAYS_FILE, allDays);
@@ -339,21 +345,32 @@ const days = {
     
     if (existingDay) {
       // 更新现有日计划
-      const index = allDays.findIndex(day => day.id === existingDay.id);
-      allDays[index] = { ...allDays[index], ...dayData };
-      await writeJsonFile(DAYS_FILE, allDays);
-      return allDays[index];
-    } else {
-      // 创建新日计划
-      const newDay = {
-        id: await generateId('days'),
-        ...dayData,
-        createdAt: new Date()
-      };
-      allDays.push(newDay);
-      await writeJsonFile(DAYS_FILE, allDays);
-      return newDay;
+      // 优先使用 id 查找，如果没有 id 则使用 date 和 userId 查找
+      let index;
+      if (existingDay.id) {
+        index = allDays.findIndex(day => day.id === existingDay.id);
+      } else {
+        index = allDays.findIndex(day => day.date === existingDay.date && day.userId === existingDay.userId);
+      }
+      if (index !== -1) {
+        allDays[index] = { ...allDays[index], ...dayData };
+        // 确保保留 id 字段（如果存在）
+        if (existingDay.id) {
+          allDays[index].id = existingDay.id;
+        }
+        await writeJsonFile(DAYS_FILE, allDays);
+        return allDays[index];
+      }
     }
+    // 创建新日计划
+    const newDay = {
+      id: await generateId('days'),
+      ...dayData,
+      createdAt: new Date()
+    };
+    allDays.push(newDay);
+    await writeJsonFile(DAYS_FILE, allDays);
+    return newDay;
   },
 
   // 删除日计划
@@ -382,6 +399,10 @@ const days = {
         if (isSummaryEmpty && areTasksEmpty) {
           allDaysMap.delete(day.date);
         } else {
+          const existingDay = allDaysMap.get(day.date);
+          if (existingDay && existingDay.id) {
+            day.id = existingDay.id;
+          }
           allDaysMap.set(day.date, day);
         }
       });
