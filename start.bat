@@ -14,15 +14,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Check if Python is installed
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Error: Python not detected, please install Python first
-    echo Download: https://www.python.org/downloads/
-    pause
-    exit /b 1
-)
-
 REM Check command line arguments
 if "%1"=="--init-only" (
     echo Initializing environment only...
@@ -40,7 +31,7 @@ if exist "backend\src\data\.env" (
     node setup.js --init-only
 )
 
-REM Start services
+REM Start services (single port mode)
 echo.
 echo Starting services...
 node start-services.js

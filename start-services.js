@@ -74,14 +74,8 @@ class ProcessManager {
     this.shuttingDown = true;
     colorLog('\n🛑 正在停止所有服务...', 'yellow');
     
-    // 先停止前端
-    if (this.processes.frontend) {
-      await this.stopProcess('frontend');
-    }
-    
-    // 再停止后端
-    if (this.processes.backend) {
-      await this.stopProcess('backend');
+    if (this.processes.server) {
+      await this.stopProcess('server');
     }
     
     colorLog('✅ 所有服务已停止', 'green');
@@ -113,7 +107,7 @@ function checkHealth(port, path = '/') {
   });
 }
 
-// 启动服务
+// 启动服务（单端口模式）
 async function startServices() {
   const processManager = new ProcessManager();
   
@@ -132,49 +126,52 @@ async function startServices() {
     fs.mkdirSync(dataDir, { recursive: true });
   }
   
-  // 启动后端服务
-  colorLog('📡 启动后端服务...', 'yellow');
-  const backendProcess = spawn('node', ['src/server.js'], {
+  // 获取端口配置
+  const PORT = process.env.PORT || 8000;
+  
+  // 启动服务（单端口模式，后端同时服务 API 和静态文件）
+  colorLog('📡 启动服务...', 'yellow');
+  const serverProcess = spawn('node', ['src/server.js'], {
     cwd: path.join(projectRoot, 'backend'),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false
   });
   
-  processManager.addProcess('backend', backendProcess);
+  processManager.addProcess('server', serverProcess);
   
-  let backendStarted = false;
-  backendProcess.stdout.on('data', (data) => {
+  let serverStarted = false;
+  serverProcess.stdout.on('data', (data) => {
     const output = data.toString().trim();
-    console.log(`[后端] ${output}`);
-    if (output.includes('Server running on port') && !backendStarted) {
-      backendStarted = true;
-      colorLog('✅ 后端服务已启动', 'green');
+    console.log(`[服务] ${output}`);
+    if (output.includes('Server running on port') && !serverStarted) {
+      serverStarted = true;
+      colorLog('✅ 服务已启动', 'green');
     }
   });
   
-  backendProcess.stderr.on('data', (data) => {
+  serverProcess.stderr.on('data', (data) => {
     const output = data.toString().trim();
-    console.error(`[后端错误] ${output}`);
+    console.error(`[服务错误] ${output}`);
   });
   
-  backendProcess.on('error', (error) => {
-    colorLog(`后端启动失败: ${error.message}`, 'red');
+  serverProcess.on('error', (error) => {
+    colorLog(`服务启动失败: ${error.message}`, 'red');
     process.exit(1);
   });
   
-  backendProcess.on('close', (code) => {
+  serverProcess.on('close', (code) => {
     if (code !== 0 && !processManager.shuttingDown) {
-      colorLog(`后端进程退出，代码: ${code}`, 'red');
+      colorLog(`服务进程退出，代码: ${code}`, 'red');
       process.exit(1);
     }
   });
   
-  // 使用健康检查等待后端启动
-  colorLog('等待后端服务就绪...', 'yellow');
+  // 使用健康检查等待服务启动
+  colorLog('等待服务就绪...', 'yellow');
   await new Promise(resolve => {
     const checkInterval = setInterval(async () => {
-      const isHealthy = await checkHealth(3000);
-      if (isHealthy || backendStarted) {
+      const isHealthy = await checkHealth(PORT);
+      if (isHealthy || serverStarted) {
         clearInterval(checkInterval);
         resolve();
       }
@@ -187,67 +184,10 @@ async function startServices() {
     }, 15000);
   });
   
-  // 启动前端服务
-  colorLog('🌐 启动前端服务...', 'yellow');
-  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-  const frontendProcess = spawn(pythonCommand, ['-m', 'http.server', '8000'], {
-    cwd: projectRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false
-  });
-  
-  processManager.addProcess('frontend', frontendProcess);
-  
-  let frontendStarted = false;
-  frontendProcess.stdout.on('data', (data) => {
-    const output = data.toString().trim();
-    console.log(`[前端] ${output}`);
-    if (output.includes('Serving HTTP on') && !frontendStarted) {
-      frontendStarted = true;
-      colorLog('✅ 前端服务已启动', 'green');
-    }
-  });
-  
-  frontendProcess.stderr.on('data', (data) => {
-    const output = data.toString().trim();
-    console.error(`[前端错误] ${output}`);
-  });
-  
-  frontendProcess.on('error', (error) => {
-    colorLog(`前端启动失败: ${error.message}`, 'red');
-    process.exit(1);
-  });
-  
-  frontendProcess.on('close', (code) => {
-    if (code !== 0 && !processManager.shuttingDown) {
-      colorLog(`前端进程退出，代码: ${code}`, 'red');
-      process.exit(1);
-    }
-  });
-  
-  // 使用健康检查等待前端启动
-  colorLog('等待前端服务就绪...', 'yellow');
-  await new Promise(resolve => {
-    const checkInterval = setInterval(async () => {
-      const isHealthy = await checkHealth(8000);
-      if (isHealthy || frontendStarted) {
-        clearInterval(checkInterval);
-        resolve();
-      }
-    }, 1000);
-    
-    // 最多等待10秒
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      resolve();
-    }, 10000);
-  });
-  
   // 显示访问信息
   colorLog('\n🎉 服务启动完成！', 'green');
-  colorLog('📱 前端地址: http://localhost:8000', 'blue');
-  colorLog('🔧 后端地址: http://localhost:3000', 'blue');
-  colorLog('\n按 Ctrl+C 停止所有服务', 'yellow');
+  colorLog(`📱 访问地址: http://localhost:${PORT}`, 'blue');
+  colorLog('\n按 Ctrl+C 停止服务', 'yellow');
   
   // 处理退出信号
   const handleShutdown = async () => {

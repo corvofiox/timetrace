@@ -13,13 +13,6 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# 检查Python是否安装
-if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
-    echo "错误: 未检测到Python，请先安装Python"
-    echo "下载地址: https://www.python.org/downloads/"
-    exit 1
-fi
-
 # 检查命令行参数
 if [ "$1" = "--init-only" ]; then
     echo "仅初始化环境..."
@@ -44,7 +37,7 @@ else
     node setup.js --init-only
 fi
 
-# 启动服务
+# 启动服务（单端口模式）
 echo ""
 echo "启动服务..."
 node start-services.js

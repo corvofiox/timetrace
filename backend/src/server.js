@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const fileDB = require('./models/fileDB');
 const { initConfig } = require('./config/keys');
@@ -20,6 +21,9 @@ const initServer = async () => {
 };
 
 const app = express();
+
+// 信任反向代理
+app.set('trust proxy', true);
 
 // Middleware
 // 配置CORS以允许前端跨域请求
@@ -49,21 +53,19 @@ app.use(express.json());
 
 // Content Security Policy middleware
 app.use((req, res, next) => {
-  // 从环境变量获取允许的域名，如果没有则使用请求的主机名
   const allowedHosts = process.env.CSP_ALLOWED_HOSTS 
     ? process.env.CSP_ALLOWED_HOSTS.split(',').map(h => h.trim())
     : [];
   
   const host = req.get('host');
   const hostname = host ? host.split(':')[0] : 'localhost';
-  const port = host ? host.split(':')[1] || '3000' : '3000';
+  const protocol = req.protocol;
   
-  // 确定允许的连接源
   let connectSrc;
   if (allowedHosts.length > 0) {
-    connectSrc = allowedHosts.map(h => `http://${h} ws://${h}`).join(' ');
+    connectSrc = allowedHosts.map(h => `${protocol}://${h} wss://${h} http://${h} ws://${h}`).join(' ');
   } else {
-    connectSrc = `'self' http://${hostname}:${port} ws://${hostname}:${port}`;
+    connectSrc = `'self'`;
   }
   
   res.setHeader(
@@ -82,19 +84,41 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/days', require('./routes/days'));
 
-// 404 处理
-app.use(notFoundHandler);
+// 静态文件服务（单端口模式）
+// 确定静态文件根目录
+const getStaticRoot = () => {
+  // __dirname = backend/src
+  // 静态文件在项目根目录: index.html, js/, styles/, libs/
+  // 开发环境: backend/src -> ../../ -> 项目根目录
+  // 生产环境(Docker): /app/backend/src -> ../../ -> /app
+  return path.join(__dirname, '../../');
+};
+
+// 静态文件路由
+app.use(express.static(getStaticRoot(), {
+  index: false
+}));
+
+// SPA 回退路由 - 所有非 API 请求返回 index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  res.sendFile(path.join(getStaticRoot(), 'index.html'));
+});
+
+// 404 处理（仅 API 路由）
+app.use('/api/*', notFoundHandler);
 
 // 全局错误处理
 app.use(errorHandler);
 
 // 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
-// 仅在开发环境且启用调试模式时可用
 if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   app.get('/debug/env', (req, res) => {
     res.status(200).json({
@@ -109,7 +133,7 @@ if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS 
   });
 }
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 
 // 启动服务器
 const startServer = async () => {
@@ -144,6 +168,7 @@ const startServer = async () => {
   
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Static files served from: ${getStaticRoot()}`);
   });
 };
 

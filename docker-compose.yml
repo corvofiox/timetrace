@@ -5,12 +5,11 @@ services:
     build: .
     container_name: timetrace
     ports:
-      - "3000:3000"
       - "8000:8000"
     volumes:
-      - ./backend/src/data:/app/data  # 挂载数据目录(包含.env文件)
+      - ./backend/src/data:/app/data
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=8000
       - DATA_DIR=/app/data
     restart: unless-stopped

@@ -11,10 +11,10 @@ COPY backend/package*.json ./backend/
 RUN cd backend && npm ci --only=production
 
 # 生产阶段
-FROM node:18-alpine AS production
+FROM node:18-alpine
 
-# 安装Python、OpenSSL、curl和dos2unix用于启动前端服务器、生成密钥、健康检查和转换行尾符
-RUN apk add --no-cache python3 openssl curl dos2unix
+# 安装OpenSSL、curl和dos2unix用于生成密钥、健康检查和转换行尾符
+RUN apk add --no-cache openssl curl dos2unix
 
 # 设置工作目录
 WORKDIR /app
@@ -33,9 +33,6 @@ COPY js ./js
 COPY libs ./libs
 
 # 复制启动脚本
-# setup.js: 环境初始化脚本（仅在需要时运行）
-# start-services.js: 服务启动脚本（启动前端和后端）
-# start.sh: Linux/macOS/Docker 启动入口（调用 setup.js 和 start-services.js）
 COPY setup.js /app/setup.js
 COPY start-services.js /app/start-services.js
 COPY start.sh /app/start.sh
@@ -48,11 +45,11 @@ RUN mkdir -p /app/data
 
 # 设置环境变量
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8000
 ENV DATA_DIR=/app/data
 
-# 暴露端口
-EXPOSE 3000 8000
+# 暴露端口（单端口模式）
+EXPOSE 8000
 
 # 启动应用
 CMD ["sh", "/app/start.sh"]
