@@ -452,6 +452,37 @@ const dataCache = {
     }
 };
 const utils = {
+    // 解析日期字符串为 Date 对象（避免时区问题）
+    parseDate(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string') {
+            return null;
+        }
+        
+        // 支持 YYYY-MM-DD 和 YYYY-MM-DDTHH:MM 格式
+        const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+        if (!match) {
+            return null;
+        }
+        
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        const day = parseInt(match[3], 10);
+        
+        // 验证日期是否有效
+        if (!this.isValidDate(year, month, day)) {
+            return null;
+        }
+        
+        // 如果有时间部分，包含时间
+        if (match[4] !== undefined && match[5] !== undefined) {
+            const hours = parseInt(match[4], 10);
+            const minutes = parseInt(match[5], 10);
+            return new Date(year, month, day, hours, minutes);
+        }
+        
+        return new Date(year, month, day);
+    },
+    
     // 格式化日期为 YYYY-MM-DD
     formatDate(date) {
         const year = date.getFullYear();
@@ -509,6 +540,20 @@ const utils = {
         };
     },
     
+    // 获取日期范围内的所有日期（不可变方式）
+    getDateRange(startDate, endDate) {
+        const dates = [];
+        const current = new Date(startDate);
+        const end = new Date(endDate);
+        
+        while (current <= end) {
+            dates.push(new Date(current));
+            current.setDate(current.getDate() + 1);
+        }
+        
+        return dates;
+    },
+    
     // 生成唯一ID
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -517,7 +562,10 @@ const utils = {
     // 计算倒计时
     calculateCountdown(targetDate) {
         const now = new Date();
-        const target = new Date(targetDate);
+        const target = utils.parseDate(targetDate);
+        if (!target) {
+            return { expired: true, text: '无效日期' };
+        }
         const diff = target - now;
         
         if (diff <= 0) {
@@ -552,9 +600,9 @@ const utils = {
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0);
         
+        let checkDate = new Date(yesterday);
+        
         for (let i = 0; i < 365; i++) {
-            const checkDate = new Date(yesterday);
-            checkDate.setDate(yesterday.getDate() - i);
             const dateStr = utils.formatDate(checkDate);
             
             if (appData.dailyPlans[dateStr] && appData.dailyPlans[dateStr].tasks) {
@@ -567,6 +615,9 @@ const utils = {
             } else {
                 break;
             }
+            
+            // 移动到前一天
+            checkDate.setDate(checkDate.getDate() - 1);
         }
         
         return streak;
@@ -621,11 +672,18 @@ const calendar = {
         // 清空日历
         elements.calendarDays.innerHTML = '';
         
+        const showWeekends = appData.settings.showWeekends;
+        const startWeekMonday = appData.settings.startWeekMonday;
+        
         // 计算第一天前的空白格子数
         let emptyDays = firstDay;
-        // 如果设置为周一作为一周的开始，则调整计算
-        if (appData.settings.startWeekMonday) {
+        if (startWeekMonday) {
             emptyDays = (firstDay === 0) ? 6 : firstDay - 1;
+        }
+        
+        // 如果隐藏周末，需要重新计算空白格子（排除周末）
+        if (!showWeekends) {
+            emptyDays = this.calculateEmptyDaysExcludingWeekends(currentYear, currentMonth, startWeekMonday);
         }
         
         // 添加空白格子，直到当月第一天
@@ -652,6 +710,36 @@ const calendar = {
         
         // 更新统计
         stats.update();
+    },
+    
+    // 计算隐藏周末时的空白格子数
+    calculateEmptyDaysExcludingWeekends(year, month, startWeekMonday) {
+        const firstDay = new Date(year, month, 1).getDay();
+        let adjustedFirstDay = firstDay;
+        
+        if (startWeekMonday) {
+            adjustedFirstDay = (firstDay === 0) ? 6 : firstDay - 1;
+        }
+        
+        // 计算在隐藏周末的情况下，第一天前有多少个工作日
+        let emptyDays = 0;
+        for (let i = 0; i < adjustedFirstDay; i++) {
+            let checkDay;
+            if (startWeekMonday) {
+                // 周一为起始：i=0 是周一，i=5 是周六，i=6 是周日
+                checkDay = i === 5 ? 6 : (i === 6 ? 0 : i + 1);
+            } else {
+                // 周日为起始：i=0 是周日，i=6 是周六
+                checkDay = i;
+            }
+            
+            // 如果不是周末（0=周日，6=周六），则计入空白格子
+            if (checkDay !== 0 && checkDay !== 6) {
+                emptyDays++;
+            }
+        }
+        
+        return emptyDays;
     },
     
     // 更新星期标题
@@ -763,8 +851,8 @@ const calendar = {
         
         // 显示目标标记
         appData.goals.forEach(goal => {
-            const goalDate = new Date(goal.date);
-            if (goalDate.toDateString() === date.toDateString()) {
+            const goalDate = utils.parseDate(goal.date);
+            if (goalDate && goalDate.toDateString() === date.toDateString()) {
                 const marker = document.createElement('div');
                 marker.classList.add('goal-marker');
                 marker.style.backgroundColor = goal.color;
@@ -1163,7 +1251,8 @@ const goals = {
 const dayModal = {
     // 打开模态框
     open(dateStr) {
-        const date = new Date(dateStr);
+        const date = utils.parseDate(dateStr);
+        if (!date) return;
         elements.modalDateTitle.textContent = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
         
         // 加载该日的计划和任务
@@ -1341,8 +1430,10 @@ const dayModal = {
                 appData.pendingTaskChanges.edited = [];
                 appData.pendingTaskChanges.deleted = [];
                 
-                const date = new Date(dateStr);
-                dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                const date = utils.parseDate(dateStr);
+                if (date) {
+                    dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                }
                 
                 calendar.render();
                 stats.update();
@@ -1808,9 +1899,10 @@ const chart = {
                 startDate = new Date(now.getFullYear(), quarter * 3, 1);
                 endDate = new Date(now.getFullYear(), quarter * 3 + 3, 0);
                 labels = [];
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                const quarterDays = utils.getDateRange(startDate, endDate);
+                quarterDays.forEach(d => {
                     labels.push(d.getDate());
-                }
+                });
                 break;
             case 'year':
                 startDate = new Date(now.getFullYear(), 0, 1);
@@ -1847,12 +1939,13 @@ const chart = {
                 data.push(chart.calculateOverallCompletionRateForPeriod(monthStart, monthEnd));
             }
         } else {
-            // 按天计算
-            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            // 按天计算（使用不可变方式）
+            const days = utils.getDateRange(startDate, endDate);
+            days.forEach(d => {
                 const dateStr = utils.formatDate(d);
                 const dayData = chart.calculateOverallCompletionRateForDay(dateStr);
                 data.push(dayData);
-            }
+            });
         }
         
         return data;
@@ -1877,14 +1970,15 @@ const chart = {
         let totalTasks = 0;
         let completedTasks = 0;
         
-        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const days = utils.getDateRange(startDate, endDate);
+        days.forEach(d => {
             const dateStr = utils.formatDate(d);
             if (appData.dailyPlans[dateStr] && appData.dailyPlans[dateStr].tasks) {
                 const tasks = appData.dailyPlans[dateStr].tasks;
                 totalTasks += tasks.length;
                 completedTasks += tasks.filter(task => task.completed).length;
             }
-        }
+        });
         
         return totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     },
@@ -2891,11 +2985,22 @@ const batchAddTask = {
     
     // 渲染迷你日历
     renderMiniCalendar() {
-        const firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay();
+        let firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay();
         const daysInMonth = utils.getDaysInMonth(this.currentYear, this.currentMonth);
         const daysInPrevMonth = this.currentMonth === 0 ? 
             utils.getDaysInMonth(this.currentYear - 1, 11) : 
             utils.getDaysInMonth(this.currentYear, this.currentMonth - 1);
+        
+        // 计算上个月和下个月的年份和月份
+        const prevMonthYear = this.currentMonth === 0 ? this.currentYear - 1 : this.currentYear;
+        const prevMonth = this.currentMonth === 0 ? 11 : this.currentMonth - 1;
+        const nextMonthYear = this.currentMonth === 11 ? this.currentYear + 1 : this.currentYear;
+        const nextMonth = this.currentMonth === 11 ? 0 : this.currentMonth + 1;
+        
+        // 如果设置为周一作为一周的开始，则调整 firstDay
+        if (appData.settings.startWeekMonday) {
+            firstDay = (firstDay === 0) ? 6 : firstDay - 1;
+        }
         
         let html = '';
         
@@ -2906,8 +3011,11 @@ const batchAddTask = {
             <button id="next-month-mini" class="btn btn-sm"><i class="ri-arrow-right-s-line"></i></button>
         </div>`;
         
-        // 星期标题
-        const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+        // 星期标题（根据设置调整）
+        let weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+        if (appData.settings.startWeekMonday) {
+            weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+        }
         html += '<div class="mini-calendar-grid">';
         weekDays.forEach(day => {
             html += `<div class="mini-calendar-weekday">${day}</div>`;
@@ -2916,7 +3024,8 @@ const batchAddTask = {
         // 上个月的日期
         for (let i = firstDay - 1; i >= 0; i--) {
             const day = daysInPrevMonth - i;
-            html += `<div class="mini-calendar-day other-month" data-date="${this.currentYear}-${String(this.currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}">${day}</div>`;
+            const dateStr = `${prevMonthYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            html += `<div class="mini-calendar-day other-month" data-date="${dateStr}">${day}</div>`;
         }
         
         // 当前月的日期
@@ -2932,7 +3041,8 @@ const batchAddTask = {
         const totalCells = firstDay + daysInMonth;
         const nextMonthDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
         for (let day = 1; day <= nextMonthDays; day++) {
-            html += `<div class="mini-calendar-day other-month" data-date="${this.currentYear}-${String(this.currentMonth + 2).padStart(2, '0')}-${String(day).padStart(2, '0')}">${day}</div>`;
+            const dateStr = `${nextMonthYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            html += `<div class="mini-calendar-day other-month" data-date="${dateStr}">${day}</div>`;
         }
         
         html += '</div>';
@@ -3032,8 +3142,15 @@ const batchAddTask = {
         
         switch (method) {
             case 'range':
-                const startDate = new Date(elements.batchStartDate.value);
-                const endDate = new Date(elements.batchEndDate.value);
+                const startDateStr = elements.batchStartDate.value;
+                const endDateStr = elements.batchEndDate.value;
+                
+                if (!startDateStr || !endDateStr) {
+                    return dates;
+                }
+                
+                const startDate = utils.parseDate(startDateStr);
+                const endDate = utils.parseDate(endDateStr);
                 
                 if (startDate && endDate && startDate <= endDate) {
                     const currentDate = new Date(startDate);
@@ -3049,8 +3166,15 @@ const batchAddTask = {
                 break;
                 
             case 'weekdays':
-                const weekdaysStart = new Date(elements.weekdaysStartDate.value);
-                const weekdaysEnd = new Date(elements.weekdaysEndDate.value);
+                const weekdaysStartStr = elements.weekdaysStartDate.value;
+                const weekdaysEndStr = elements.weekdaysEndDate.value;
+                
+                if (!weekdaysStartStr || !weekdaysEndStr) {
+                    return dates;
+                }
+                
+                const weekdaysStart = utils.parseDate(weekdaysStartStr);
+                const weekdaysEnd = utils.parseDate(weekdaysEndStr);
                 const checkedWeekdays = Array.from(document.querySelectorAll('input[name="weekday"]:checked'))
                     .map(cb => parseInt(cb.value));
                 
@@ -3651,7 +3775,8 @@ const notesSearch = {
     
     // 在日历中打开选中的日期
     async openDateInCalendar(dateStr) {
-        const date = new Date(dateStr);
+        const date = utils.parseDate(dateStr);
+        if (!date) return;
         appData.selectedDate = date;
         
         // 切换到日期所在的月份

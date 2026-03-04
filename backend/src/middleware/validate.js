@@ -1,5 +1,6 @@
 const { validationErrorResponse } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
+const { dateUtils } = require('../models/fileDB');
 
 function validateRequired(value, fieldName) {
   if (value === undefined || value === null || value === '') {
@@ -126,6 +127,17 @@ function validateDate(value, fieldName = '日期') {
       field: fieldName,
       reason: 'invalid_format',
       expected: 'YYYY-MM-DD'
+    };
+  }
+  
+  // 验证日期是否真实存在（如 2024-02-30 无效）
+  if (!dateUtils.isValidDateString(value)) {
+    return {
+      valid: false,
+      message: `${fieldName}无效，请输入有效的日期`,
+      field: fieldName,
+      reason: 'invalid_date',
+      value: value
     };
   }
   

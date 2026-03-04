@@ -84,16 +84,16 @@ exports.getDays = async (req, res) => {
     const { startDate, endDate } = req.query;
     
     if (startDate && endDate) {
-      if (!validateDateFormat(startDate)) {
-        return validationErrorResponse(res, '开始日期格式无效，请使用 YYYY-MM-DD 格式', ErrorCodes.DAY_DATE_INVALID, {
+      if (!dateUtils.isValidDateString(startDate)) {
+        return validationErrorResponse(res, '开始日期无效，请输入有效的日期', ErrorCodes.DAY_DATE_INVALID, {
           field: 'startDate',
           value: startDate,
           expected: 'YYYY-MM-DD'
         });
       }
       
-      if (!validateDateFormat(endDate)) {
-        return validationErrorResponse(res, '结束日期格式无效，请使用 YYYY-MM-DD 格式', ErrorCodes.DAY_DATE_INVALID, {
+      if (!dateUtils.isValidDateString(endDate)) {
+        return validationErrorResponse(res, '结束日期无效，请输入有效的日期', ErrorCodes.DAY_DATE_INVALID, {
           field: 'endDate',
           value: endDate,
           expected: 'YYYY-MM-DD'
