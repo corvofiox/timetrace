@@ -1063,7 +1063,10 @@ const goals = {
                 }
             })
             .catch(error => {
-                alert('添加失败: ' + (error.message || '未知错误'));
+                const handled = window.ErrorHandler ? 
+                    window.ErrorHandler.handle(error, '添加目标') : 
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '添加失败');
             });
     },
     
@@ -1083,7 +1086,10 @@ const goals = {
                 }
             })
             .catch(error => {
-                alert('更新失败: ' + (error.message || '未知错误'));
+                const handled = window.ErrorHandler ? 
+                    window.ErrorHandler.handle(error, '更新目标') : 
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '更新失败');
             });
     },
     
@@ -1107,7 +1113,10 @@ const goals = {
                 }
             })
             .catch(error => {
-                alert('删除失败: ' + (error.message || '未知错误'));
+                const handled = window.ErrorHandler ? 
+                    window.ErrorHandler.handle(error, '删除目标') : 
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '删除失败');
             });
     },
     
@@ -1338,8 +1347,10 @@ const dayModal = {
                 calendar.render();
                 stats.update();
             } catch (error) {
-                console.error('保存失败:', error);
-                alert('保存失败: ' + (error.message || '未知错误'));
+                const handled = window.ErrorHandler ? 
+                    window.ErrorHandler.handle(error, '保存日计划') : 
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '保存失败');
             }
             
         });
@@ -1470,7 +1481,10 @@ const dayModal = {
                 dayModal.close();
             })
             .catch(error => {
-                alert('保存失败: ' + (error.message || '未知错误'));
+                const handled = window.ErrorHandler ? 
+                    window.ErrorHandler.handle(error, '保存日计划') : 
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '保存失败');
             });
     }
 };
@@ -2309,7 +2323,11 @@ function loadDays() {
             });
         })
         .catch(error => {
-            console.error('加载日计划失败:', error);
+            if (window.ErrorHandler) {
+                window.ErrorHandler.handle(error, '加载日计划', { silent: true });
+            } else {
+                console.error('加载日计划失败:', error);
+            }
         });
 }
 
@@ -2558,7 +2576,10 @@ function handleLogin(e) {
             showApp();
         })
         .catch(error => {
-            alert('登录失败: ' + (error.message || '未知错误'));
+            const handled = window.ErrorHandler ? 
+                window.ErrorHandler.handle(error, '登录') : 
+                { message: error.message || '未知错误' };
+            alert(handled.message || '登录失败');
         });
 }
 
@@ -2590,7 +2611,10 @@ function handleRegister(e) {
             showApp();
         })
         .catch(error => {
-            alert('注册失败: ' + (error.message || '未知错误'));
+            const handled = window.ErrorHandler ? 
+                window.ErrorHandler.handle(error, '注册') : 
+                { message: error.message || '未知错误' };
+            alert(handled.message || '注册失败');
         });
 }
 

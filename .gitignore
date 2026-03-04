@@ -3,3 +3,6 @@ backend/src/data/
 需求文档.md
 .env*
 *.log
+AGENTS.md
+.plan/
+code_review.md

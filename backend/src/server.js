@@ -3,6 +3,7 @@ const cors = require('cors');
 const fileDB = require('./models/fileDB');
 const { initConfig } = require('./config/keys');
 const { cleanExpiredRefreshTokens } = require('./models/database');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // 初始化服务器
 const initServer = async () => {
@@ -85,6 +86,12 @@ app.use((req, res, next) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/days', require('./routes/days'));
+
+// 404 处理
+app.use(notFoundHandler);
+
+// 全局错误处理
+app.use(errorHandler);
 
 // 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
 // 仅在开发环境且启用调试模式时可用
