@@ -27,9 +27,22 @@ exports.protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, getJWTSecret());
-    req.user = await findUserById(decoded.id);
 
-    if (!req.user) {
+    let user;
+    try {
+      user = await findUserById(decoded.id);
+    } catch (dbError) {
+      console.error('[认证失败] 查询用户数据库错误', {
+        error: dbError.message,
+        userId: decoded.id,
+        path: req.path
+      });
+      return unauthorizedResponse(res, '认证服务暂时不可用，请稍后重试', ErrorCodes.AUTH_TOKEN_INVALID, {
+        reason: 'database_error'
+      });
+    }
+
+    if (!user) {
       console.error('[认证失败] 用户不存在', {
         userId: decoded.id,
         path: req.path
@@ -40,6 +53,7 @@ exports.protect = async (req, res, next) => {
       });
     }
 
+    req.user = user;
     next();
   } catch (err) {
     console.error('[认证失败] 令牌验证错误', {

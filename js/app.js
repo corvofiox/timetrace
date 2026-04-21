@@ -1631,16 +1631,16 @@ const goalModal = {
     
     // 保存目标
     save() {
-        const name = elements.goalName.value.trim();
+        const title = elements.goalName.value.trim();
         const date = elements.goalDate.value;
         const color = elements.goalColor.value;
         
-        if (!name || !date) {
+        if (!title || !date) {
             alert('请填写完整的目标信息');
             return;
         }
         
-        const goalData = { name, date, color };
+        const goalData = { title, date, color };
         
         if (appData.editingGoalId) {
             // 更新现有目标

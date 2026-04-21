@@ -229,7 +229,7 @@ exports.createOrUpdateDay = async (req, res) => {
       for (let i = 0; i < timeEntries.length; i++) {
         const entry = timeEntries[i];
         
-        if (entry.goalId) {
+        if (entry.goalId && entry.goalId.toString().trim() !== '') {
           const goal = await getGoalById(entry.goalId);
           if (!goal) {
             return validationErrorResponse(res, `时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, {
@@ -317,7 +317,7 @@ exports.updateDay = async (req, res) => {
       for (let i = 0; i < timeEntries.length; i++) {
         const entry = timeEntries[i];
         
-        if (entry.goalId) {
+        if (entry.goalId && entry.goalId.toString().trim() !== '') {
           const goal = await getGoalById(entry.goalId);
           if (!goal) {
             return validationErrorResponse(res, `时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, {

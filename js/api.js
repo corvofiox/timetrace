@@ -259,22 +259,6 @@ const api = {
         }
     },
     
-    async login(credentials) {
-        return await this.auth.login(credentials);
-    },
-    
-    async register(userData) {
-        return await this.auth.register(userData);
-    },
-    
-    async logout() {
-        return await this.auth.logout();
-    },
-    
-    async getMe() {
-        return await this.auth.getMe();
-    },
-    
     goals: {
         async getAll() {
             return await api.request('/goals');

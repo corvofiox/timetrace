@@ -302,7 +302,8 @@ const days = {
   // 根据ID查找日计划
   findById: async (id) => {
     const allDays = await readJsonFile(DAYS_FILE);
-    return allDays.find(day => day.id === id);
+    const idStr = id.toString();
+    return allDays.find(day => day.id.toString() === idStr);
   },
 
   // 根据日期和用户ID查找日计划
