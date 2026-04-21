@@ -11,16 +11,17 @@ const {
 } = require('../models/database');
 
 const dateUtils = require('../models/fileDB').dateUtils;
-const { 
-  successResponse, 
-  errorResponse, 
-  validationErrorResponse, 
-  notFoundResponse, 
+const {
+  successResponse,
+  errorResponse,
+  validationErrorResponse,
+  notFoundResponse,
   createdResponse,
   unauthorizedResponse,
   serverErrorResponse
 } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
+const { validateString } = require('../middleware/validate');
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -424,14 +425,17 @@ exports.searchNotes = async (req, res) => {
       });
     }
     
-    if (keyword.length < 2) {
-      return validationErrorResponse(res, '搜索关键词至少需要2个字符', ErrorCodes.VALIDATION_LENGTH, {
-        field: 'keyword',
-        minLength: 2,
-        actualLength: keyword.length
+    const keywordValidation = validateString(keyword, '搜索关键词', { minLength: 2, maxLength: 100 });
+    if (!keywordValidation.valid) {
+      return validationErrorResponse(res, keywordValidation.message, ErrorCodes.VALIDATION_LENGTH, {
+        field: keywordValidation.field,
+        reason: keywordValidation.reason,
+        minLength: keywordValidation.minLength,
+        maxLength: keywordValidation.maxLength,
+        actualLength: keywordValidation.actualLength
       });
     }
-    
+
     const results = await searchDaysByKeyword(keyword.trim(), req.user.id);
     
     console.log('[搜索笔记成功]', {

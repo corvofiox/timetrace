@@ -317,61 +317,69 @@ const days = {
 
   // 创建或更新日计划
   createOrUpdate: async (dayData) => {
-    const allDays = await readJsonFile(DAYS_FILE);
-    const existingDay = await days.findByDate(dayData.date, dayData.userId);
-    
-    // 检查是否应该删除条目：备注为空且任务数组为空
+    // 预先计算是否为空数据，避免重复计算
     const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
     const areTasksEmpty = !dayData.tasks || dayData.tasks.length === 0;
-    
-    if (isSummaryEmpty && areTasksEmpty) {
-      // 如果备注和任务都为空，删除现有条目（如果存在）
-      if (existingDay) {
-        // 优先使用 id 查找，如果没有 id 则使用 date 和 userId 查找
-        let index;
-        if (existingDay.id) {
-          index = allDays.findIndex(day => day.id === existingDay.id);
-        } else {
-          index = allDays.findIndex(day => day.date === existingDay.date && day.userId === existingDay.userId);
+    const shouldDelete = isSummaryEmpty && areTasksEmpty;
+
+    try {
+      return await atomicUpdate(DAYS_FILE, async (allDays) => {
+        const existingDay = allDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+
+        if (shouldDelete) {
+          // 如果备注和任务都为空，删除现有条目（如果存在）
+          if (existingDay) {
+            const index = allDays.findIndex(day => day.id === existingDay.id ||
+              (day.date === existingDay.date && day.userId === existingDay.userId));
+            if (index !== -1) {
+              allDays.splice(index, 1);
+            }
+          }
+          return allDays;
         }
-        if (index !== -1) {
-          allDays.splice(index, 1);
-          await writeJsonFile(DAYS_FILE, allDays);
-          return { deleted: true, id: existingDay.id };
+
+        if (existingDay) {
+          // 更新现有日计划
+          const index = allDays.findIndex(day => day.id === existingDay.id ||
+            (day.date === existingDay.date && day.userId === existingDay.userId));
+          if (index !== -1) {
+            allDays[index] = { ...allDays[index], ...dayData };
+            // 确保保留 id 字段（如果存在）
+            if (existingDay.id) {
+              allDays[index].id = existingDay.id;
+            }
+            allDays[index].updatedAt = new Date();
+            return allDays;
+          }
         }
-      }
-      // 如果没有现有条目，什么都不做
-      return { deleted: false, message: 'No data to save' };
+
+        // 创建新日计划
+        const newDay = {
+          id: await generateId('days'),
+          ...dayData,
+          createdAt: new Date()
+        };
+        allDays.push(newDay);
+        return allDays;
+      }).then((updatedDays) => {
+        // 使用预先计算的结果，避免重复计算
+        if (shouldDelete) {
+          return { deleted: true, message: 'No data to save' };
+        }
+
+        // 查找操作后的结果（更新或新建）
+        const resultDay = updatedDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+        return resultDay || { deleted: false, message: 'No data to save' };
+      });
+    } catch (error) {
+      console.error('[原子更新失败]', {
+        error: error.message,
+        date: dayData.date,
+        userId: dayData.userId,
+        operation: shouldDelete ? 'delete' : (dayData.id ? 'update' : 'create')
+      });
+      throw error;
     }
-    
-    if (existingDay) {
-      // 更新现有日计划
-      // 优先使用 id 查找，如果没有 id 则使用 date 和 userId 查找
-      let index;
-      if (existingDay.id) {
-        index = allDays.findIndex(day => day.id === existingDay.id);
-      } else {
-        index = allDays.findIndex(day => day.date === existingDay.date && day.userId === existingDay.userId);
-      }
-      if (index !== -1) {
-        allDays[index] = { ...allDays[index], ...dayData };
-        // 确保保留 id 字段（如果存在）
-        if (existingDay.id) {
-          allDays[index].id = existingDay.id;
-        }
-        await writeJsonFile(DAYS_FILE, allDays);
-        return allDays[index];
-      }
-    }
-    // 创建新日计划
-    const newDay = {
-      id: await generateId('days'),
-      ...dayData,
-      createdAt: new Date()
-    };
-    allDays.push(newDay);
-    await writeJsonFile(DAYS_FILE, allDays);
-    return newDay;
   },
 
   // 删除日计划
@@ -440,10 +448,30 @@ const refreshTokens = {
     await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
   },
 
-  // 查找刷新令牌
+  // 查找刷新令牌（同时验证是否过期）
   find: async (token) => {
     const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    return allTokens.find(rt => rt.token === token);
+    const found = allTokens.find(rt => rt.token === token);
+
+    if (!found) return null;
+
+    // 验证令牌是否过期（默认7天）
+    const maxAgeDays = 7;
+    const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+    const createdAt = new Date(found.createdAt);
+    const age = Date.now() - createdAt.getTime();
+
+    if (age > maxAgeMs) {
+      // 令牌已过期，删除它
+      const index = allTokens.findIndex(rt => rt.token === token);
+      if (index !== -1) {
+        allTokens.splice(index, 1);
+        await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
+      }
+      return null;
+    }
+
+    return found;
   },
 
   // 删除刷新令牌
@@ -575,13 +603,10 @@ const scheduleSave = () => {
 const generateId = async (type) => {
   const id = idCounters[type]++;
   generationCounters[type]++;
-  
-  if (generationCounters[type] >= SAVE_AFTER_GENERATIONS) {
-    await saveIdCounters();
-  } else {
-    scheduleSave();
-  }
-  
+
+  // 每次生成ID都立即保存，确保数据安全
+  await saveIdCounters();
+
   return id;
 };
 

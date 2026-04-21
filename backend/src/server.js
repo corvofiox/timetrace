@@ -30,19 +30,15 @@ app.set('trust proxy', true);
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-      : [];
-    
-    if (allowedOrigins.length === 0) {
-      return callback(null, true);
-    }
-    
+      : ['http://localhost:8000', 'http://localhost:3000'];
+
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    
+
     return callback(new Error('CORS policy violation: origin not allowed'));
   },
   credentials: true,
@@ -122,10 +118,8 @@ app.use(errorHandler);
 if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   app.get('/debug/env', (req, res) => {
     res.status(200).json({
-      JWT_SECRET_EXISTS: !!process.env.JWT_SECRET,
-      JWT_SECRET_LENGTH: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
-      REFRESH_TOKEN_SECRET_EXISTS: !!process.env.REFRESH_TOKEN_SECRET,
-      REFRESH_TOKEN_SECRET_LENGTH: process.env.REFRESH_TOKEN_SECRET ? process.env.REFRESH_TOKEN_SECRET.length : 0,
+      JWT_SECRET_CONFIGURED: !!process.env.JWT_SECRET,
+      REFRESH_TOKEN_SECRET_CONFIGURED: !!process.env.REFRESH_TOKEN_SECRET,
       NODE_ENV: process.env.NODE_ENV,
       DOCKER_ENV: process.env.DOCKER_ENV,
       DATA_DIR: process.env.DATA_DIR

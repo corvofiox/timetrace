@@ -32,10 +32,17 @@ const appData = {
     restoreCurrentMonth() {
         const savedMonth = localStorage.getItem('currentMonth');
         const savedYear = localStorage.getItem('currentYear');
-        
+
         if (savedMonth !== null && savedYear !== null) {
-            this.currentMonth = parseInt(savedMonth, 10);
-            this.currentYear = parseInt(savedYear, 10);
+            const month = parseInt(savedMonth, 10);
+            const year = parseInt(savedYear, 10);
+
+            // 验证数据有效性
+            if (!isNaN(month) && month >= 0 && month <= 11 &&
+                !isNaN(year) && year >= 1900 && year <= 2100) {
+                this.currentMonth = month;
+                this.currentYear = year;
+            }
         }
     }
 };
@@ -452,6 +459,14 @@ const dataCache = {
     }
 };
 const utils = {
+    // HTML转义函数，防止XSS攻击
+    escapeHtml(text) {
+        if (typeof text !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+
     // 解析日期字符串为 Date 对象（避免时区问题）
     parseDate(dateStr) {
         if (!dateStr || typeof dateStr !== 'string') {
@@ -918,15 +933,17 @@ const calendar = {
             appData.currentMonth = 11;
             appData.currentYear--;
         }
-        
+
         // 保存当前月份状态
         appData.saveCurrentMonth();
-        
+
         loadDays().then(() => {
             calendar.render();
+        }).catch(error => {
+            console.error('加载日计划失败:', error);
         });
     },
-    
+
     // 切换到下个月
     nextMonth() {
         appData.currentMonth++;
@@ -934,26 +951,30 @@ const calendar = {
             appData.currentMonth = 0;
             appData.currentYear++;
         }
-        
+
         // 保存当前月份状态
         appData.saveCurrentMonth();
-        
+
         loadDays().then(() => {
             calendar.render();
+        }).catch(error => {
+            console.error('加载日计划失败:', error);
         });
     },
-    
+
     // 跳转到本月
     goToCurrentMonth() {
         const today = new Date();
         appData.currentMonth = today.getMonth();
         appData.currentYear = today.getFullYear();
-        
+
         // 保存当前月份状态
         appData.saveCurrentMonth();
-        
+
         loadDays().then(() => {
             calendar.render();
+        }).catch(error => {
+            console.error('加载日计划失败:', error);
         });
     }
 };
@@ -1013,9 +1034,13 @@ const goals = {
         
         const countdownResult = utils.calculateCountdown(goal.date);
         
+        const safeName = utils.escapeHtml(goal.name);
+        const safeDate = utils.escapeHtml(new Date(goal.date).toLocaleString('zh-CN'));
+        const safeCountdown = utils.escapeHtml(countdownResult.text);
+
         goalCard.innerHTML = `
             <div class="goal-header">
-                <div class="goal-name">${goal.name}</div>
+                <div class="goal-name">${safeName}</div>
                 <div class="goal-actions">
                     <button class="btn btn-icon btn-sm edit-goal" data-id="${goal.id}">
                         <i class="ri-edit-line"></i>
@@ -1025,27 +1050,13 @@ const goals = {
                     </button>
                 </div>
             </div>
-            <div class="goal-date">目标日期: ${new Date(goal.date).toLocaleString('zh-CN')}</div>
+            <div class="goal-date">目标日期: ${safeDate}</div>
             <div class="goal-countdown ${countdownResult.expired ? 'expired' : ''}">
-                ${countdownResult.expired ? '已过期' : '剩余: ' + countdownResult.text}
+                ${countdownResult.expired ? '已过期' : '剩余: ' + safeCountdown}
             </div>
         `;
-        
-        // 添加编辑事件
-        goalCard.querySelector('.edit-goal').addEventListener('click', (e) => {
-            e.stopPropagation();
-            goalModal.open(goal.id);
-        });
-        
-        // 添加删除事件
-        goalCard.querySelector('.delete-goal').addEventListener('click', (e) => {
-            e.stopPropagation();
-            confirmDialog.open(
-                '删除目标',
-                '确定要删除这个目标吗？此操作不可撤销。',
-                () => goals.remove(goal.id)
-            );
-        });
+
+        // 编辑和删除事件通过事件委托处理，不在此处绑定
         
         // 添加拖拽事件 - 使用更可靠的实现
         goalCard.addEventListener('dragstart', (e) => {
@@ -1301,12 +1312,14 @@ const dayModal = {
         if (task.completed) {
             taskItem.classList.add('completed');
         }
-        
+
+        const safeTitle = utils.escapeHtml(task.title);
+
         taskItem.innerHTML = `
             <div class="task-checkbox ${task.completed ? 'checked' : ''}" data-id="${task.id}">
                 ${task.completed ? '<i class="ri-checkbox-circle-fill"></i>' : '<i class="ri-checkbox-blank-circle-line"></i>'}
             </div>
-            <div class="task-text">${task.title}</div>
+            <div class="task-text">${safeTitle}</div>
             <div class="task-actions">
                 <button class="btn btn-icon btn-sm edit-task" data-id="${task.id}">
                     <i class="ri-edit-line"></i>
@@ -1317,173 +1330,7 @@ const dayModal = {
             </div>
         `;
         
-        // 添加切换完成状态事件
-        taskItem.querySelector('.task-checkbox').addEventListener('click', async () => {
-            const dateStr = utils.formatDate(appData.selectedDate);
-            
-            let currentCompleted = task.completed;
-            
-            const existingChange = appData.pendingTaskChanges.edited.find(
-                change => change.taskId === task.id && change.dateStr === dateStr
-            );
-            
-            if (existingChange) {
-                currentCompleted = existingChange.completed;
-            }
-            
-            const newCompleted = !currentCompleted;
-            
-            const editChange = {
-                taskId: task.id,
-                dateStr: dateStr,
-                title: task.title,
-                description: task.description,
-                completed: newCompleted
-            };
-            
-            const existingIndex = appData.pendingTaskChanges.edited.findIndex(
-                change => change.taskId === task.id && change.dateStr === dateStr
-            );
-            
-            if (existingIndex !== -1) {
-                appData.pendingTaskChanges.edited[existingIndex] = editChange;
-            } else {
-                appData.pendingTaskChanges.edited.push(editChange);
-            }
-            
-            const checkbox = taskItem.querySelector('.task-checkbox');
-            const icon = checkbox.querySelector('i');
-            
-            if (newCompleted) {
-                checkbox.classList.add('checked');
-                icon.className = 'ri-checkbox-circle-fill';
-                taskItem.classList.add('completed');
-            } else {
-                checkbox.classList.remove('checked');
-                icon.className = 'ri-checkbox-blank-circle-line';
-                taskItem.classList.remove('completed');
-            }
-            
-            // 立即保存到后端
-            const existingDailyPlan = appData.dailyPlans[dateStr];
-            const dailyPlan = existingDailyPlan ? { ...existingDailyPlan } : { date: dateStr, summary: '', tasks: [] };
-            dailyPlan.date = dateStr;
-            dailyPlan.summary = elements.dailySummary.value;
-            
-            // 保留原始记录的 id 字段
-            if (existingDailyPlan && existingDailyPlan.id) {
-                dailyPlan.id = existingDailyPlan.id;
-            }
-            
-            // 确保任务数组是深拷贝
-            dailyPlan.tasks = [...(dailyPlan.tasks || [])];
-            
-            // 应用待处理的更改
-            dailyPlan.tasks = dailyPlan.tasks.filter(task => {
-                return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
-            });
-            
-            appData.pendingTaskChanges.edited.forEach(edit => {
-                if (edit.dateStr === dateStr) {
-                    const taskIndex = dailyPlan.tasks.findIndex(t => t.id === edit.taskId);
-                    if (taskIndex !== -1) {
-                        // 只更新明确提供的字段
-                        const updates = {};
-                        if (edit.title !== undefined) updates.title = edit.title;
-                        if (edit.description !== undefined) updates.description = edit.description;
-                        if (edit.completed !== undefined) updates.completed = edit.completed;
-                        
-                        dailyPlan.tasks[taskIndex] = {
-                            ...dailyPlan.tasks[taskIndex],
-                            ...updates
-                        };
-                    }
-                }
-            });
-            
-            appData.pendingTaskChanges.added.forEach(addition => {
-                if (addition.dateStr === dateStr) {
-                    const correspondingEdit = appData.pendingTaskChanges.edited.find(
-                        edit => edit.taskId === addition.id
-                    );
-                    
-                    dailyPlan.tasks.push({
-                        id: addition.id,
-                        title: addition.title,
-                        description: addition.description,
-                        completed: correspondingEdit ? correspondingEdit.completed : addition.completed
-                    });
-                }
-            });
-            
-            try {
-                const response = await api.createOrUpdateDay(dailyPlan);
-                const savedDay = response.data;
-                
-                if (response.message && response.message.includes('deleted due to empty content')) {
-                    delete appData.dailyPlans[dateStr];
-                } else {
-                    appData.dailyPlans[dateStr] = savedDay;
-                }
-                
-                appData.pendingTaskChanges.added = [];
-                appData.pendingTaskChanges.edited = [];
-                appData.pendingTaskChanges.deleted = [];
-                
-                const date = utils.parseDate(dateStr);
-                if (date) {
-                    dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
-                }
-                
-                calendar.render();
-                stats.update();
-            } catch (error) {
-                const handled = window.ErrorHandler ? 
-                    window.ErrorHandler.handle(error, '保存日计划') : 
-                    { message: error.message || '未知错误' };
-                alert(handled.message || '保存失败');
-            }
-            
-        });
-        
-        // 添加编辑事件
-        taskItem.querySelector('.edit-task').addEventListener('click', () => {
-            taskInputModal.open(task.id, task);
-        });
-        
-        // 添加删除事件
-        taskItem.querySelector('.delete-task').addEventListener('click', () => {
-            const dateStr = utils.formatDate(appData.selectedDate);
-            
-            // 首先检查是否在待处理添加列表中（如果是新添加的任务）
-            const addedIndex = appData.pendingTaskChanges.added.findIndex(
-                addition => addition.id === task.id && addition.dateStr === dateStr
-            );
-            
-            if (addedIndex !== -1) {
-                // 如果是新添加的任务，直接从添加列表中移除
-                appData.pendingTaskChanges.added.splice(addedIndex, 1);
-            } else {
-                // 如果是已存在的任务，添加到待处理删除列表
-                const deleteChange = {
-                    taskId: task.id,
-                    dateStr: dateStr
-                };
-                
-                // 检查是否已经在待处理删除列表中
-                const existingIndex = appData.pendingTaskChanges.deleted.findIndex(
-                    change => change.taskId === task.id
-                );
-                
-                if (existingIndex === -1) {
-                    // 添加新的待处理删除
-                    appData.pendingTaskChanges.deleted.push(deleteChange);
-                }
-            }
-            
-            // 更新界面显示
-            taskInputModal.updateUIWithPendingChanges();
-        });
+        // 任务项的事件通过事件委托在 tasksList 上统一处理
         
         return taskItem;
     },
@@ -2283,6 +2130,14 @@ const countdown = {
     }
 };
 
+// 页面卸载时清理资源
+window.addEventListener('beforeunload', () => {
+    countdown.stopTimer();
+    if (reorderQueue.isProcessing) {
+        reorderQueue.clearQueue();
+    }
+});
+
     // 检查认证状态
 function checkAuthStatus() {
     const token = localStorage.getItem('token');
@@ -2479,7 +2334,218 @@ function bindEvents() {
     elements.closeGoalModalBtn.addEventListener('click', goalModal.close);
     elements.cancelGoalBtn.addEventListener('click', goalModal.close);
     elements.saveGoalBtn.addEventListener('click', goalModal.save);
-    
+
+    // 使用事件委托处理目标列表的编辑和删除按钮
+    elements.goalsContainer.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-goal');
+        const deleteBtn = e.target.closest('.delete-goal');
+
+        if (editBtn) {
+            e.stopPropagation();
+            const goalId = editBtn.dataset.id;
+            goalModal.open(goalId);
+            return;
+        }
+
+        if (deleteBtn) {
+            e.stopPropagation();
+            const goalId = deleteBtn.dataset.id;
+            confirmDialog.open(
+                '删除目标',
+                '确定要删除这个目标吗？此操作不可撤销。',
+                () => goals.remove(goalId)
+            );
+            return;
+        }
+    });
+
+    // 使用事件委托处理任务列表的点击事件
+    elements.tasksList.addEventListener('click', async (e) => {
+        const checkbox = e.target.closest('.task-checkbox');
+        const editBtn = e.target.closest('.edit-task');
+        const deleteBtn = e.target.closest('.delete-task');
+
+        if (checkbox) {
+            const taskId = checkbox.dataset.id;
+            const dateStr = utils.formatDate(appData.selectedDate);
+            const taskItem = checkbox.closest('.task-item');
+
+            // 查找任务数据
+            const dailyPlan = appData.dailyPlans[dateStr] || { tasks: [] };
+            let task = dailyPlan.tasks.find(t => t.id === taskId);
+
+            // 检查待处理编辑
+            let currentCompleted = task ? task.completed : false;
+            const existingChange = appData.pendingTaskChanges.edited.find(
+                change => change.taskId === taskId && change.dateStr === dateStr
+            );
+            if (existingChange) {
+                currentCompleted = existingChange.completed;
+            }
+
+            const newCompleted = !currentCompleted;
+
+            const editChange = {
+                taskId: taskId,
+                dateStr: dateStr,
+                title: task ? task.title : '',
+                description: task ? task.description : '',
+                completed: newCompleted
+            };
+
+            const existingIndex = appData.pendingTaskChanges.edited.findIndex(
+                change => change.taskId === taskId && change.dateStr === dateStr
+            );
+
+            if (existingIndex !== -1) {
+                appData.pendingTaskChanges.edited[existingIndex] = editChange;
+            } else {
+                appData.pendingTaskChanges.edited.push(editChange);
+            }
+
+            // 更新UI
+            const icon = checkbox.querySelector('i');
+            if (newCompleted) {
+                checkbox.classList.add('checked');
+                if (icon) icon.className = 'ri-checkbox-circle-fill';
+                taskItem.classList.add('completed');
+            } else {
+                checkbox.classList.remove('checked');
+                if (icon) icon.className = 'ri-checkbox-blank-circle-line';
+                taskItem.classList.remove('completed');
+            }
+
+            // 立即保存到后端
+            const existingDailyPlan = appData.dailyPlans[dateStr];
+            const dailyPlanToSave = existingDailyPlan ? { ...existingDailyPlan } : { date: dateStr, summary: '', tasks: [] };
+            dailyPlanToSave.date = dateStr;
+            dailyPlanToSave.summary = elements.dailySummary.value;
+
+            if (existingDailyPlan && existingDailyPlan.id) {
+                dailyPlanToSave.id = existingDailyPlan.id;
+            }
+
+            dailyPlanToSave.tasks = [...(dailyPlanToSave.tasks || [])];
+
+            // 应用待处理的更改
+            dailyPlanToSave.tasks = dailyPlanToSave.tasks.filter(task => {
+                return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
+            });
+
+            appData.pendingTaskChanges.edited.forEach(edit => {
+                if (edit.dateStr === dateStr) {
+                    const taskIndex = dailyPlanToSave.tasks.findIndex(t => t.id === edit.taskId);
+                    if (taskIndex !== -1) {
+                        const updates = {};
+                        if (edit.title !== undefined) updates.title = edit.title;
+                        if (edit.description !== undefined) updates.description = edit.description;
+                        if (edit.completed !== undefined) updates.completed = edit.completed;
+
+                        dailyPlanToSave.tasks[taskIndex] = {
+                            ...dailyPlanToSave.tasks[taskIndex],
+                            ...updates
+                        };
+                    }
+                }
+            });
+
+            appData.pendingTaskChanges.added.forEach(addition => {
+                if (addition.dateStr === dateStr) {
+                    const correspondingEdit = appData.pendingTaskChanges.edited.find(
+                        edit => edit.taskId === addition.id
+                    );
+
+                    dailyPlanToSave.tasks.push({
+                        id: addition.id,
+                        title: addition.title,
+                        description: addition.description,
+                        completed: correspondingEdit ? correspondingEdit.completed : addition.completed
+                    });
+                }
+            });
+
+            try {
+                const response = await api.createOrUpdateDay(dailyPlanToSave);
+                const savedDay = response.data;
+
+                if (response.message && response.message.includes('deleted due to empty content')) {
+                    delete appData.dailyPlans[dateStr];
+                } else {
+                    appData.dailyPlans[dateStr] = savedDay;
+                }
+
+                appData.pendingTaskChanges.added = [];
+                appData.pendingTaskChanges.edited = [];
+                appData.pendingTaskChanges.deleted = [];
+
+                const date = utils.parseDate(dateStr);
+                if (date) {
+                    dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                }
+
+                calendar.render();
+                stats.update();
+            } catch (error) {
+                const handled = window.ErrorHandler ?
+                    window.ErrorHandler.handle(error, '保存日计划') :
+                    { message: error.message || '未知错误' };
+                alert(handled.message || '保存失败');
+            }
+
+            return;
+        }
+
+        if (editBtn) {
+            const taskId = editBtn.dataset.id;
+            const dateStr = utils.formatDate(appData.selectedDate);
+            const dailyPlan = appData.dailyPlans[dateStr] || { tasks: [] };
+
+            // 查找任务（包括待处理更改）
+            let task = dailyPlan.tasks.find(t => t.id === taskId);
+            const pendingEdit = appData.pendingTaskChanges.edited.find(
+                change => change.taskId === taskId && change.dateStr === dateStr
+            );
+            if (pendingEdit) {
+                task = { ...task, ...pendingEdit };
+            }
+
+            if (task) {
+                taskInputModal.open(taskId, task);
+            }
+            return;
+        }
+
+        if (deleteBtn) {
+            const taskId = deleteBtn.dataset.id;
+            const dateStr = utils.formatDate(appData.selectedDate);
+
+            // 首先检查是否在待处理添加列表中
+            const addedIndex = appData.pendingTaskChanges.added.findIndex(
+                addition => addition.id === taskId && addition.dateStr === dateStr
+            );
+
+            if (addedIndex !== -1) {
+                appData.pendingTaskChanges.added.splice(addedIndex, 1);
+            } else {
+                const deleteChange = {
+                    taskId: taskId,
+                    dateStr: dateStr
+                };
+
+                const existingIndex = appData.pendingTaskChanges.deleted.findIndex(
+                    change => change.taskId === taskId
+                );
+
+                if (existingIndex === -1) {
+                    appData.pendingTaskChanges.deleted.push(deleteChange);
+                }
+            }
+
+            taskInputModal.updateUIWithPendingChanges();
+            return;
+        }
+    });
+
     // 颜色选择器
     document.querySelectorAll('.color-option').forEach(option => {
         option.addEventListener('click', () => {
@@ -3710,6 +3776,16 @@ const notesSearch = {
         
         if (!keyword) {
             elements.searchResultsContainer.innerHTML = '<div class="no-results">请输入搜索关键字</div>';
+            return;
+        }
+        
+        if (keyword.length < 2) {
+            elements.searchResultsContainer.innerHTML = '<div class="no-results">搜索关键字至少需要2个字符</div>';
+            return;
+        }
+        
+        if (keyword.length > 100) {
+            elements.searchResultsContainer.innerHTML = '<div class="no-results">搜索关键字不能超过100个字符</div>';
             return;
         }
         
