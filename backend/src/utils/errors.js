@@ -81,11 +81,5 @@ const ErrorCodes = {
 };
 
 module.exports = {
-  AppError,
-  ValidationError,
-  AuthenticationError,
-  NotFoundError,
-  ConflictError,
-  DatabaseError,
   ErrorCodes
 };

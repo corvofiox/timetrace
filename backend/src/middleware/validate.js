@@ -266,13 +266,5 @@ function validate(rules) {
 }
 
 module.exports = {
-  validate,
-  validateRequired,
-  validateString,
-  validateEmail,
-  validatePassword,
-  validateDate,
-  validateTime,
-  validateColor,
-  validateArray
+  validateString
 };

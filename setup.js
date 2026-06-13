@@ -54,7 +54,7 @@ const envTemplate = `# 环境变量配置文件
 # 此文件由setup.js自动生成，包含敏感信息，请勿提交到版本控制系统
 
 # 服务器端口
-PORT=3000
+PORT=8000
 
 # JWT密钥配置（自动生成）
 JWT_SECRET=

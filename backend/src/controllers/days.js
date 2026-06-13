@@ -13,7 +13,6 @@ const {
 const dateUtils = require('../models/fileDB').dateUtils;
 const {
   successResponse,
-  errorResponse,
   validationErrorResponse,
   notFoundResponse,
   createdResponse,

@@ -62,7 +62,6 @@ function getRefreshTokenExpireDays() {
 }
 
 module.exports = {
-  loadEnvVariables,
   getJWTSecret,
   getRefreshTokenSecret,
   getRefreshTokenExpireDays,

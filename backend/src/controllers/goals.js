@@ -8,7 +8,6 @@ const {
 } = require('../models/database');
 const { 
   successResponse, 
-  errorResponse, 
   validationErrorResponse, 
   notFoundResponse, 
   createdResponse,
@@ -82,7 +81,7 @@ exports.getGoal = async (req, res) => {
 
 exports.createGoal = async (req, res) => {
   try {
-    const { title, color, description } = req.body;
+    const { title, color, description, date } = req.body;
 
     if (!title || title.trim() === '') {
       return validationErrorResponse(res, '目标标题不能为空', ErrorCodes.GOAL_TITLE_EMPTY, {
@@ -112,6 +111,7 @@ exports.createGoal = async (req, res) => {
       title: title.trim(),
       color: color || '#3498db',
       description: description?.trim() || '',
+      date: date?.trim() || '',
       userId: req.user.id
     };
     
@@ -138,7 +138,7 @@ exports.createGoal = async (req, res) => {
 
 exports.updateGoal = async (req, res) => {
   try {
-    const { title, color, description } = req.body;
+    const { title, color, description, date } = req.body;
     const goalId = req.params.id;
 
     if (title !== undefined) {
@@ -190,6 +190,7 @@ exports.updateGoal = async (req, res) => {
     if (title !== undefined) updateData.title = title.trim();
     if (color !== undefined) updateData.color = color;
     if (description !== undefined) updateData.description = description?.trim() || '';
+    if (date !== undefined) updateData.date = date?.trim() || '';
     
     const goal = await updateGoal(goalId, updateData);
     

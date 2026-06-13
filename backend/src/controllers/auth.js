@@ -7,7 +7,6 @@ const {
   notFoundResponse, 
   createdResponse, 
   successResponse, 
-  errorResponse,
   conflictResponse,
   serverErrorResponse
 } = require('../utils/response');

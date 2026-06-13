@@ -1,11 +1,14 @@
 /* 全局样式 */
 :root {
     --primary-color: #4a6cf7;
+    --primary-color-rgb: 74, 108, 247;
     --secondary-color: #f5f7fa;
     --accent-color: #ff6b6b;
     --text-color: #333;
     --text-light: #666;
     --border-color: #e1e5e9;
+    --bg-color: #ffffff;
+    --background-light: #f8f9fa;
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
@@ -1004,7 +1007,7 @@ textarea {
     box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
 }
 
-.btn {
+.auth-form .btn {
     display: inline-block;
     padding: 0.75rem 1.5rem;
     background-color: var(--primary-color);
@@ -1018,16 +1021,16 @@ textarea {
     text-align: center;
 }
 
-.btn:hover {
+.auth-form .btn:hover {
     background-color: #3a5bd9;
 }
 
-.btn-block {
+.auth-form .btn-block {
     display: block;
     width: 100%;
 }
 
-.btn-full {
+.auth-form .btn-full {
     display: block;
     width: 100%;
     padding: 0.875rem 1.5rem;
@@ -1039,7 +1042,7 @@ textarea {
     transition: var(--transition);
 }
 
-.btn-full:hover {
+.auth-form .btn-full:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
 }
@@ -1676,6 +1679,51 @@ textarea {
     margin-bottom: 0.25rem;
 }
 
+.preview-operation {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(var(--primary-color-rgb, 74, 108, 247), 0.05);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.preview-note {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.preview-loading {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-light);
+}
+
+.removed-tasks {
+    color: var(--accent-color);
+}
+
+.new-tasks {
+    color: #2ecc71;
+}
+
+.task-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-left: 0.5rem;
+}
+
+.empty-message {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-light);
+    font-style: italic;
+}
+
 .form-hint {
     display: block;
     margin-top: 0.5rem;
@@ -1840,17 +1888,6 @@ textarea {
     font-weight: 600;
     color: var(--primary-color);
     margin-bottom: 0.25rem;
-}
-
-.search-result-content {
-    color: var(--text-color);
-    font-size: 0.9rem;
-}
-
-.search-result-highlight {
-    background-color: rgba(255, 193, 7, 0.3);
-    padding: 0 2px;
-    border-radius: 2px;
 }
 
 .no-results {
