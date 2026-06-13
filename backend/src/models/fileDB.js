@@ -218,8 +218,8 @@ const goals = {
     let savedGoal = null;
     await atomicUpdate(GOALS_FILE, async (allGoals) => {
       savedGoal = {
-        id: await generateId('goals'),
         ...goalData,
+        id: await generateId('goals'),
         createdAt: new Date()
       };
       allGoals.push(savedGoal);
@@ -398,20 +398,21 @@ const days = {
           const index = allDays.findIndex(day => day.id === existingDay.id ||
             (day.date === existingDay.date && day.userId === existingDay.userId));
           if (index !== -1) {
-            allDays[index] = { ...allDays[index], ...dayData };
-            // 确保保留 id 字段（如果存在）
-            if (existingDay.id) {
-              allDays[index].id = existingDay.id;
-            }
-            allDays[index].updatedAt = new Date();
+            allDays[index] = {
+              ...allDays[index],
+              ...dayData,
+              id: existingDay.id || allDays[index].id,
+              createdAt: allDays[index].createdAt,
+              updatedAt: new Date()
+            };
             return allDays;
           }
         }
 
         // 创建新日计划
         const newDay = {
-          id: await generateId('days'),
           ...dayData,
+          id: await generateId('days'),
           createdAt: new Date()
         };
         allDays.push(newDay);

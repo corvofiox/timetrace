@@ -2772,7 +2772,7 @@ function handleLogout(e) {
     // 清除应用数据
     appData.goals = [];
     appData.dailyPlans = {};
-    dataCache.clearCache();
+    dataCache.clearAllCache();
     reorderQueue.operations = [];
     reorderQueue.saveQueue();
     

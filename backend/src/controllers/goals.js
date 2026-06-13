@@ -190,7 +190,7 @@ exports.updateGoal = async (req, res) => {
 
     const updateData = {};
     if (title !== undefined) updateData.title = title.trim();
-    if (color !== undefined) updateData.color = color;
+    if (color !== undefined && color !== '') updateData.color = color;
     if (description !== undefined) updateData.description = description?.trim() || '';
     if (date !== undefined) updateData.date = date?.trim() || '';
     

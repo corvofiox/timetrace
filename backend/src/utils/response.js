@@ -46,15 +46,6 @@ function serverErrorResponse(res, message = '服务器内部错误', errorCode =
   return errorResponse(res, message, 500, errorCode, details);
 }
 
-function appErrorResponse(res, error) {
-  if (error.isOperational) {
-    return errorResponse(res, error.message, error.statusCode, error.errorCode, error.details);
-  }
-  
-  console.error('非预期错误:', error);
-  return serverErrorResponse(res, '服务器内部错误', 'UNKNOWN_ERROR');
-}
-
 module.exports = {
   successResponse,
   errorResponse,
@@ -63,6 +54,5 @@ module.exports = {
   notFoundResponse,
   createdResponse,
   conflictResponse,
-  serverErrorResponse,
-  appErrorResponse
+  serverErrorResponse
 };

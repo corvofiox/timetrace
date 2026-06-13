@@ -247,13 +247,15 @@ exports.createOrUpdateDay = async (req, res) => {
         return validation.error.response(res, ...validation.error.args);
       }
     }
-    
-    
+
     const dayData = {
-      ...req.body,
+      date: req.body.date,
+      timeEntries: req.body.timeEntries,
+      tasks: req.body.tasks,
+      summary: req.body.summary,
       userId: req.user.id
     };
-    
+
     const day = await createOrUpdateDay(dayData);
     
     if (day.deleted) {
@@ -313,7 +315,14 @@ exports.updateDay = async (req, res) => {
       }
     }
     
-    const day = await createOrUpdateDay({ ...req.body, id: dayId, date: existingDay.date });
+    const day = await createOrUpdateDay({
+      id: dayId,
+      date: existingDay.date,
+      timeEntries: req.body.timeEntries,
+      tasks: req.body.tasks,
+      summary: req.body.summary,
+      userId: req.user.id
+    });
     
     if (day.deleted) {
       return successResponse(res, {
