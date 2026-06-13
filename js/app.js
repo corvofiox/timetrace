@@ -466,6 +466,45 @@ const dataCache = {
         this.monthDataCache.clear();
     }
 };
+// 将待处理的变更应用到任务列表
+function applyPendingChanges(tasks, dateStr) {
+    const pending = appData.pendingTaskChanges;
+    
+    // 1. 过滤已删除
+    tasks = tasks.filter(task => {
+        return !pending.deleted.some(deleted => deleted.taskId === task.id);
+    });
+    
+    // 2. 应用编辑
+    pending.edited.forEach(edit => {
+        if (edit.dateStr === dateStr) {
+            const idx = tasks.findIndex(t => t.id === edit.taskId);
+            if (idx !== -1) {
+                const merged = { ...tasks[idx] };
+                if (edit.title !== undefined) merged.title = edit.title;
+                if (edit.description !== undefined) merged.description = edit.description;
+                if (edit.completed !== undefined) merged.completed = edit.completed;
+                tasks[idx] = merged;
+            }
+        }
+    });
+    
+    // 3. 添加新任务
+    pending.added.forEach(addition => {
+        if (addition.dateStr === dateStr) {
+            const correspondingEdit = pending.edited.find(edit => edit.taskId === addition.id);
+            tasks.push({
+                id: addition.id,
+                title: addition.title,
+                description: addition.description,
+                completed: correspondingEdit ? correspondingEdit.completed : addition.completed
+            });
+        }
+    });
+    
+    return tasks;
+}
+
 const utils = {
     // HTML转义函数，防止XSS攻击
     escapeHtml(text) {
@@ -1362,43 +1401,7 @@ const dayModal = {
         dailyPlan.date = dateStr;
         dailyPlan.summary = summary;
         
-        // 应用待处理的更改
-        // 1. 应用删除
-        dailyPlan.tasks = dailyPlan.tasks.filter(task => {
-            return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
-        });
-        
-        // 2. 应用编辑
-        appData.pendingTaskChanges.edited.forEach(edit => {
-            if (edit.dateStr === dateStr) {
-                const taskIndex = dailyPlan.tasks.findIndex(t => t.id === edit.taskId);
-                if (taskIndex !== -1) {
-                    dailyPlan.tasks[taskIndex] = {
-                        ...dailyPlan.tasks[taskIndex],
-                        title: edit.title,
-                        description: edit.description,
-                        completed: edit.completed !== undefined ? edit.completed : dailyPlan.tasks[taskIndex].completed
-                    };
-                }
-            }
-        });
-        
-        // 3. 应用添加，同时检查是否有对应的编辑
-        appData.pendingTaskChanges.added.forEach(addition => {
-            if (addition.dateStr === dateStr) {
-                // 检查是否有对应的编辑更改
-                const correspondingEdit = appData.pendingTaskChanges.edited.find(
-                    edit => edit.taskId === addition.id
-                );
-                
-                dailyPlan.tasks.push({
-                    id: addition.id,
-                    title: addition.title,
-                    description: addition.description,
-                    completed: correspondingEdit ? correspondingEdit.completed : addition.completed
-                });
-            }
-        });
+        dailyPlan.tasks = applyPendingChanges(dailyPlan.tasks, dateStr);
         
         // 使用API保存
         api.createOrUpdateDay(dailyPlan)
@@ -1617,46 +1620,7 @@ const taskInputModal = {
     updateUIWithPendingChanges() {
         const dateStr = utils.formatDate(appData.selectedDate);
         const dailyPlan = appData.dailyPlans[dateStr] || { date: dateStr, summary: '', tasks: [] };
-        
-        // 创建任务列表的副本
-        let tasks = [...dailyPlan.tasks];
-        
-        // 应用待处理的删除
-        tasks = tasks.filter(task => {
-            return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
-        });
-        
-        // 应用待处理的编辑
-        appData.pendingTaskChanges.edited.forEach(edit => {
-            if (edit.dateStr === dateStr) {
-                const taskIndex = tasks.findIndex(t => t.id === edit.taskId);
-                if (taskIndex !== -1) {
-                    tasks[taskIndex] = {
-                        ...tasks[taskIndex],
-                        title: edit.title,
-                        description: edit.description,
-                        completed: edit.completed !== undefined ? edit.completed : tasks[taskIndex].completed
-                    };
-                }
-            }
-        });
-        
-        // 应用待处理的添加
-        appData.pendingTaskChanges.added.forEach(addition => {
-            if (addition.dateStr === dateStr) {
-                // 检查是否有对应的编辑更改
-                const correspondingEdit = appData.pendingTaskChanges.edited.find(
-                    edit => edit.taskId === addition.id
-                );
-                
-                tasks.push({
-                    id: addition.id,
-                    title: addition.title,
-                    description: addition.description,
-                    completed: correspondingEdit ? correspondingEdit.completed : addition.completed
-                });
-            }
-        });
+        const tasks = applyPendingChanges([...dailyPlan.tasks], dateStr);
         
         // 更新界面
         dayModal.renderTasks(tasks);
@@ -1977,19 +1941,7 @@ const userSettings = {
             saveBtn.className = originalClasses;
             saveBtn.disabled = false;
             
-            // 关闭模态框
-            // 尝试关闭用户设置模态框
-            
-            // 只移除active类，让CSS控制显示
-            if (elements.userSettingsModal) {
-                elements.userSettingsModal.classList.remove('active');
-            }
-            
-            // 备用方法：直接通过ID获取并关闭
-            const modal = document.getElementById('user-settings-modal');
-            if (modal) {
-                modal.classList.remove('active');
-            }
+            userSettings.close();
         }, CONSTANTS.SAVE_FEEDBACK_DELAY);
     },
     
@@ -2461,42 +2413,7 @@ function bindEvents() {
 
             dailyPlanToSave.tasks = [...(dailyPlanToSave.tasks || [])];
 
-            // 应用待处理的更改
-            dailyPlanToSave.tasks = dailyPlanToSave.tasks.filter(task => {
-                return !appData.pendingTaskChanges.deleted.some(deleted => deleted.taskId === task.id);
-            });
-
-            appData.pendingTaskChanges.edited.forEach(edit => {
-                if (edit.dateStr === dateStr) {
-                    const taskIndex = dailyPlanToSave.tasks.findIndex(t => t.id === edit.taskId);
-                    if (taskIndex !== -1) {
-                        const updates = {};
-                        if (edit.title !== undefined) updates.title = edit.title;
-                        if (edit.description !== undefined) updates.description = edit.description;
-                        if (edit.completed !== undefined) updates.completed = edit.completed;
-
-                        dailyPlanToSave.tasks[taskIndex] = {
-                            ...dailyPlanToSave.tasks[taskIndex],
-                            ...updates
-                        };
-                    }
-                }
-            });
-
-            appData.pendingTaskChanges.added.forEach(addition => {
-                if (addition.dateStr === dateStr) {
-                    const correspondingEdit = appData.pendingTaskChanges.edited.find(
-                        edit => edit.taskId === addition.id
-                    );
-
-                    dailyPlanToSave.tasks.push({
-                        id: addition.id,
-                        title: addition.title,
-                        description: addition.description,
-                        completed: correspondingEdit ? correspondingEdit.completed : addition.completed
-                    });
-                }
-            });
+            dailyPlanToSave.tasks = applyPendingChanges(dailyPlanToSave.tasks, dateStr);
 
             try {
                 const response = await api.createOrUpdateDay(dailyPlanToSave);
@@ -3841,7 +3758,7 @@ const notesSearch = {
         results.forEach(result => {
             // 格式化日期显示
             const date = utils.parseDate(result.date);
-            if (!date) continue;
+            if (!date) return;
             const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
             
             // 高亮匹配的关键字
