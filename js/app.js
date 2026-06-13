@@ -1,12 +1,8 @@
 // 应用常量
 const CONSTANTS = {
     MAX_TASK_DISPLAY: 3,
-    MAX_TASK_TITLE_LENGTH: 200,
-    MAX_TASK_DESCRIPTION_LENGTH: 1000,
-    MAX_SUMMARY_LENGTH: 2000,
     MIN_YEAR: 1900,
     MAX_YEAR: 2100,
-    DEBOUNCE_DELAY: 300,
     SAVE_FEEDBACK_DELAY: 800
 };
 
@@ -288,22 +284,6 @@ const reorderQueue = {
     }
 };
 
-// 拖拽辅助函数
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.goal-card:not(.dragging)')];
-    
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else {
-            return closest;
-        }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
 // DOM元素引用
 const elements = {
     // 认证相关元素
@@ -362,7 +342,6 @@ const elements = {
     
     // 折线图元素
     heatmapToggle: document.getElementById('heatmap-toggle'),
-    chartContainer: document.getElementById('chart-container'),
     chartCanvas: document.getElementById('task-chart'),
     chartType: document.getElementById('chart-type'),
     
@@ -405,11 +384,9 @@ const elements = {
     // 认证表单元素
     loginEmail: document.getElementById('login-email'),
     loginPassword: document.getElementById('login-password'),
-    loginBtn: document.getElementById('login-btn'),
     registerUsername: document.getElementById('register-username'),
     registerEmail: document.getElementById('register-email'),
     registerPassword: document.getElementById('register-password'),
-    registerBtn: document.getElementById('register-btn'),
     
     // 批量添加任务元素
     openBatchAddModalBtn: document.getElementById('open-batch-add-modal-btn'),
@@ -1075,7 +1052,7 @@ const goals = {
         const countdownResult = utils.calculateCountdown(goal.date);
         
         const safeName = utils.escapeHtml(goal.name);
-        const safeDate = utils.escapeHtml(new Date(goal.date).toLocaleString('zh-CN'));
+        const safeDate = utils.escapeHtml((utils.parseDate(goal.date) || goal.date).toLocaleString('zh-CN'));
         const safeCountdown = utils.escapeHtml(countdownResult.text);
 
         goalCard.innerHTML = `
@@ -3790,7 +3767,6 @@ const monthPicker = {
         // 更新当前显示的年月
         appData.currentYear = this.selectedYear;
         appData.currentMonth = this.selectedMonth;
-        calendar.currentDate = new Date(this.selectedYear, this.selectedMonth, 1);
         
         // 保存当前月份状态
         appData.saveCurrentMonth();
@@ -3864,7 +3840,8 @@ const notesSearch = {
         let html = '';
         results.forEach(result => {
             // 格式化日期显示
-            const date = new Date(result.date);
+            const date = utils.parseDate(result.date);
+            if (!date) continue;
             const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
             
             // 高亮匹配的关键字
