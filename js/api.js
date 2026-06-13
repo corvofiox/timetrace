@@ -354,11 +354,7 @@ const api = {
     async getDays(startDate, endDate) {
         return await this.days.getAll(startDate, endDate);
     },
-    
-    async getDayByDate(date) {
-        return await this.days.getByDate(date);
-    },
-    
+
     async createOrUpdateDay(dayData) {
         return await this.days.createOrUpdate(dayData);
     },

@@ -176,6 +176,7 @@ const reorderQueue = {
                 if (response && response.data) {
                     appData.goals = response.data;
                 }
+                goals.forceRender();
                 break;
             default:
                 // 未知的操作类型
@@ -1092,7 +1093,7 @@ const goals = {
         
         const countdownResult = utils.calculateCountdown(goal.date);
         
-        const safeName = utils.escapeHtml(goal.name);
+        const safeName = utils.escapeHtml(goal.title);
         const safeDate = utils.escapeHtml((utils.parseDate(goal.date) || goal.date).toLocaleString('zh-CN'));
         const safeCountdown = utils.escapeHtml(countdownResult.text);
 
@@ -1460,7 +1461,7 @@ const goalModal = {
             const goal = appData.goals.find(g => g.id === goalId);
             if (goal) {
                 elements.goalModalTitle.textContent = '编辑目标';
-                elements.goalName.value = goal.name;
+                elements.goalName.value = goal.title;
                 elements.goalDate.value = goal.date;
                 elements.goalColor.value = goal.color;
                 
@@ -2657,21 +2658,11 @@ function handleLogin(e) {
         return;
     }
     
-    api.login({ email, password })
+    api.auth.login({ email, password })
         .then(data => {
             appData.user = data.user;
             appData.isAuthenticated = true;
             
-            // 重置设置为默认值
-            appData.settings = {
-                theme: 'default',
-                showWeekends: true,
-                startWeekMonday: false,
-                enableNotifications: false,
-                notificationTime: '09:00'
-            };
-            
-            // 加载用户特定的设置
             userSettings.load();
             
             // 显示欢迎消息
@@ -2703,7 +2694,7 @@ function handleRegister(e) {
         return;
     }
     
-    api.register({ username, email, password })
+    api.auth.register({ username, email, password })
         .then(data => {
             appData.user = data.user;
             appData.isAuthenticated = true;
@@ -2721,7 +2712,7 @@ function handleRegister(e) {
 
 function handleLogout(e) {
     e.preventDefault();
-    localStorage.removeItem('token');
+    api.auth.logout();
     appData.user = null;
     appData.isAuthenticated = false;
     
