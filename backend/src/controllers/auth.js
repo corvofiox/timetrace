@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getJWTSecret, getRefreshTokenSecret } = require('../config/keys');
+const { getJWTSecret, getRefreshTokenSecret, getRefreshTokenExpireDays } = require('../config/keys');
 const { 
   validationErrorResponse, 
   unauthorizedResponse, 
@@ -248,7 +248,7 @@ exports.refreshToken = async (req, res) => {
       });
     }
 
-    const tokenData = await findRefreshToken(refreshToken);
+    const tokenData = await findRefreshToken(refreshToken, getRefreshTokenExpireDays());
     if (!tokenData) {
       return unauthorizedResponse(res, '无效的刷新令牌', ErrorCodes.AUTH_TOKEN_INVALID, {
         reason: 'refresh_token_invalid'

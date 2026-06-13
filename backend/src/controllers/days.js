@@ -462,14 +462,14 @@ exports.searchNotes = async (req, res) => {
 exports.batchUpdateDays = async (req, res) => {
   try {
     const { days } = req.body;
-    
+
     if (!days) {
       return validationErrorResponse(res, '请提供日计划数据', ErrorCodes.VALIDATION_REQUIRED, {
         field: 'days',
         reason: 'required'
       });
     }
-    
+
     if (!Array.isArray(days)) {
       return validationErrorResponse(res, '日计划数据必须是数组格式', ErrorCodes.VALIDATION_FORMAT, {
         field: 'days',
@@ -485,6 +485,18 @@ exports.batchUpdateDays = async (req, res) => {
       });
     }
 
+    // 限制批量更新数量，防止性能问题
+    const MAX_BATCH_SIZE = 100;
+    if (days.length > MAX_BATCH_SIZE) {
+      return validationErrorResponse(res, `批量更新数量不能超过${MAX_BATCH_SIZE}条`, ErrorCodes.VALIDATION_RANGE, {
+        field: 'days',
+        reason: 'too_many_items',
+        maxSize: MAX_BATCH_SIZE,
+        actualSize: days.length
+      });
+    }
+
+    // 验证所有日期格式
     for (let i = 0; i < days.length; i++) {
       const day = days[i];
       if (!day.date) {
@@ -501,19 +513,20 @@ exports.batchUpdateDays = async (req, res) => {
         });
       }
     }
-    
+
+    // 添加用户ID并执行批量更新
     const userDays = days.map(day => ({
       ...day,
       userId: req.user.id
     }));
-    
+
     const updatedDays = await batchUpdateDays(userDays);
-    
+
     console.log('[批量更新日计划成功]', {
       userId: req.user.id,
       count: updatedDays.length
     });
-    
+
     successResponse(res, {
       count: updatedDays.length,
       data: updatedDays
@@ -521,11 +534,10 @@ exports.batchUpdateDays = async (req, res) => {
   } catch (error) {
     console.error('[批量更新日计划失败]', {
       error: error.message,
-      stack: error.stack,
       userId: req.user?.id,
       daysCount: req.body.days?.length
     });
-    
+
     return serverErrorResponse(res, '批量更新失败，请稍后重试');
   }
 };

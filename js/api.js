@@ -36,18 +36,10 @@ const api = {
         if (!contentType || !contentType.includes('application/json')) {
             return null;
         }
-        
-        const responseText = await response.text();
-        
+
         try {
-            return JSON.parse(responseText);
+            return await response.json();
         } catch (error) {
-            const trimmedText = responseText.trim();
-            const lastBraceIndex = trimmedText.lastIndexOf('}');
-            if (lastBraceIndex !== -1) {
-                const cleanedText = trimmedText.substring(0, lastBraceIndex + 1);
-                return JSON.parse(cleanedText);
-            }
             console.error('[API] JSON解析失败:', error.message);
             return null;
         }
@@ -300,7 +292,10 @@ const api = {
         async getAll(startDate, endDate) {
             let query = '';
             if (startDate && endDate) {
-                query = `?startDate=${startDate}&endDate=${endDate}`;
+                const params = new URLSearchParams();
+                params.append('startDate', startDate);
+                params.append('endDate', endDate);
+                query = `?${params.toString()}`;
             }
             return await api.request(`/days/${query}`);
         },
@@ -318,7 +313,9 @@ const api = {
         
         async searchNotes(searchParams) {
             const { keyword } = searchParams;
-            const query = `?keyword=${encodeURIComponent(keyword)}`;
+            const params = new URLSearchParams();
+            params.append('keyword', keyword);
+            const query = `?${params.toString()}`;
             return await api.request(`/days/search${query}`);
         },
         

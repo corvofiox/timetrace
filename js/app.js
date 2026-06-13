@@ -1,3 +1,29 @@
+// 应用常量
+const CONSTANTS = {
+    MAX_TASK_DISPLAY: 3,
+    MAX_TASK_TITLE_LENGTH: 200,
+    MAX_TASK_DESCRIPTION_LENGTH: 1000,
+    MAX_SUMMARY_LENGTH: 2000,
+    MIN_YEAR: 1900,
+    MAX_YEAR: 2100,
+    DEBOUNCE_DELAY: 300,
+    SAVE_FEEDBACK_DELAY: 800
+};
+
+// 确保 ErrorHandler 可用（备用机制）
+if (typeof window !== 'undefined' && !window.ErrorHandler) {
+    window.ErrorHandler = {
+        handle: function(error, context, options) {
+            console.error(`[${context}] 错误:`, error);
+            if (!options || !options.silent) {
+                const message = error && error.message ? error.message : '操作失败，请稍后重试';
+                alert(message);
+            }
+            return { code: 'UNKNOWN', message: error && error.message, handled: true };
+        }
+    };
+}
+
 // 应用数据模型
 const appData = {
     goals: [],
@@ -39,7 +65,7 @@ const appData = {
 
             // 验证数据有效性
             if (!isNaN(month) && month >= 0 && month <= 11 &&
-                !isNaN(year) && year >= 1900 && year <= 2100) {
+                !isNaN(year) && year >= CONSTANTS.MIN_YEAR && year <= CONSTANTS.MAX_YEAR) {
                 this.currentMonth = month;
                 this.currentYear = year;
             }
@@ -124,6 +150,12 @@ const reorderQueue = {
                     
                     // 等待一段时间后重试
                     await new Promise(resolve => setTimeout(resolve, 2000));
+                } else {
+                    // 非网络错误也需提示用户
+                    const handled = window.ErrorHandler ? 
+                        window.ErrorHandler.handle(error, '目标排序保存') : 
+                        { message: error.message || '未知错误' };
+                    alert(handled.message || '目标排序保存失败，请刷新页面后重试');
                 }
             }
             
@@ -895,8 +927,8 @@ const calendar = {
             tasksContainer.classList.add('day-tasks');
             
             const tasks = appData.dailyPlans[dateStr].tasks;
-            const maxDisplay = 3; // 最多显示3个任务
-            
+            const maxDisplay = CONSTANTS.MAX_TASK_DISPLAY;
+
             for (let i = 0; i < Math.min(tasks.length, maxDisplay); i++) {
                 const taskItem = document.createElement('div');
                 taskItem.classList.add('day-task-item');
@@ -941,6 +973,9 @@ const calendar = {
             calendar.render();
         }).catch(error => {
             console.error('加载日计划失败:', error);
+            if (window.ErrorHandler) {
+                window.ErrorHandler.handle(error, '加载日计划', { silent: true });
+            }
         });
     },
 
@@ -959,6 +994,9 @@ const calendar = {
             calendar.render();
         }).catch(error => {
             console.error('加载日计划失败:', error);
+            if (window.ErrorHandler) {
+                window.ErrorHandler.handle(error, '加载日计划', { silent: true });
+            }
         });
     },
 
@@ -975,6 +1013,9 @@ const calendar = {
             calendar.render();
         }).catch(error => {
             console.error('加载日计划失败:', error);
+            if (window.ErrorHandler) {
+                window.ErrorHandler.handle(error, '加载日计划', { silent: true });
+            }
         });
     }
 };
@@ -1389,7 +1430,7 @@ const dayModal = {
                 const savedDay = response.data;
                 
                 // 检查是否删除了条目
-                if (response.message && response.message.includes('deleted due to empty content')) {
+                if (response.message && response.message.includes('已删除')) {
                     // 从应用数据中删除该日期的条目
                     delete appData.dailyPlans[dateStr];
                     // 清空表单
@@ -1971,8 +2012,8 @@ const userSettings = {
         saveBtn.textContent = '已保存 ✓';
         saveBtn.className = 'btn btn-success';
         saveBtn.disabled = true;
-        
-        // 800ms后恢复按钮状态并关闭模态框
+
+        // 延迟后恢复按钮状态并关闭模态框
         setTimeout(() => {
             // 恢复按钮状态
             saveBtn.textContent = originalText;
@@ -1992,7 +2033,7 @@ const userSettings = {
             if (modal) {
                 modal.classList.remove('active');
             }
-        }, 800);
+        }, CONSTANTS.SAVE_FEEDBACK_DELAY);
     },
     
     // 应用主题
@@ -2076,23 +2117,44 @@ const stats = {
 // 倒计时更新
 let countdownTimer = null;
 const countdown = {
+    _boundHandleVisibility: null,
+
     // 启动倒计时更新
     startTimer() {
         if (countdownTimer) return;
-        
+
         countdownTimer = setInterval(() => {
             // 只更新倒计时文本，不重新渲染整个目标列表
             this.updateCountdownText();
         }, 1000);
+
+        // 使用 Page Visibility API 优化性能
+        if (!this._boundHandleVisibility) {
+            this._boundHandleVisibility = () => this.handleVisibilityChange();
+        }
+        document.addEventListener('visibilitychange', this._boundHandleVisibility);
     },
-    
+
+    // 处理页面可见性变化
+    handleVisibilityChange() {
+        if (document.hidden) {
+            // 页面隐藏时暂停倒计时以节省资源
+            this.pauseTimer();
+        } else {
+            // 页面显示时恢复倒计时
+            if (appData.goals.length > 0) {
+                this.startTimer();
+            }
+        }
+    },
+
     // 更新倒计时文本，不重新渲染整个列表
     updateCountdownText() {
         const goalCards = document.querySelectorAll('.goal-card');
         goalCards.forEach(card => {
             const goalId = card.dataset.goalId;
             const goal = appData.goals.find(g => g.id.toString() === goalId);
-            
+
             if (goal) {
                 const countdownResult = utils.calculateCountdown(goal.date);
                 const countdownElement = card.querySelector('.goal-countdown');
@@ -2103,7 +2165,7 @@ const countdown = {
             }
         });
     },
-    
+
     // 暂停倒计时更新
     pauseTimer() {
         if (countdownTimer) {
@@ -2111,7 +2173,7 @@ const countdown = {
             countdownTimer = null;
         }
     },
-    
+
     // 恢复倒计时更新
     resumeTimer() {
         if (!countdownTimer && appData.goals.length > 0) {
@@ -2120,12 +2182,15 @@ const countdown = {
             }, 1000);
         }
     },
-    
+
     // 停止倒计时更新
     stopTimer() {
         if (countdownTimer) {
             clearInterval(countdownTimer);
             countdownTimer = null;
+        }
+        if (this._boundHandleVisibility) {
+            document.removeEventListener('visibilitychange', this._boundHandleVisibility);
         }
     }
 };
@@ -2468,7 +2533,7 @@ function bindEvents() {
                 const response = await api.createOrUpdateDay(dailyPlanToSave);
                 const savedDay = response.data;
 
-                if (response.message && response.message.includes('deleted due to empty content')) {
+                if (response.message && response.message.includes('已删除')) {
                     delete appData.dailyPlans[dateStr];
                 } else {
                     appData.dailyPlans[dateStr] = savedDay;

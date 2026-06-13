@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const fileDB = require('./models/fileDB');
-const { initConfig } = require('./config/keys');
+const { initConfig, getRefreshTokenExpireDays } = require('./config/keys');
 const { cleanExpiredRefreshTokens } = require('./models/database');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
@@ -144,7 +144,7 @@ const startServer = async () => {
     
     setTimeout(async () => {
       try {
-        const deletedCount = await cleanExpiredRefreshTokens(7);
+        const deletedCount = await cleanExpiredRefreshTokens(getRefreshTokenExpireDays());
         if (deletedCount > 0) {
           console.log(`已清理 ${deletedCount} 个过期的刷新令牌`);
         }

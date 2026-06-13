@@ -119,9 +119,9 @@ const saveRefreshToken = async (token, userId) => {
 };
 
 // 查找刷新令牌
-const findRefreshToken = async (token) => {
+const findRefreshToken = async (token, maxAgeDays = 7) => {
   await ensureDBInitialized();
-  return await fileDB.refreshTokens.find(token);
+  return await fileDB.refreshTokens.find(token, maxAgeDays);
 };
 
 // 删除刷新令牌

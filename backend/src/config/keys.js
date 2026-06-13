@@ -49,10 +49,23 @@ function initConfig() {
   }
 }
 
+function getRefreshTokenExpireDays() {
+  const expire = process.env.REFRESH_TOKEN_EXPIRE || '7d';
+  const match = expire.match(/^(\d+)([dh])$/i);
+  if (match) {
+    const value = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    if (unit === 'd') return value;
+    if (unit === 'h') return Math.ceil(value / 24);
+  }
+  return 7;
+}
+
 module.exports = {
   loadEnvVariables,
   getJWTSecret,
   getRefreshTokenSecret,
+  getRefreshTokenExpireDays,
   getDataDir,
   initConfig
 };

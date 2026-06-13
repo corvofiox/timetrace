@@ -2,17 +2,26 @@ const { serverErrorResponse } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
 
 function errorHandler(err, req, res, next) {
-  console.error('[全局错误处理]', {
+  // 生产环境不输出敏感信息到日志
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  const logData = {
     error: err.message,
-    stack: err.stack,
     path: req.path,
     method: req.method,
-    body: sanitizeBody(req.body),
-    query: req.query,
-    params: req.params,
     userId: req.user?.id,
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // 非生产环境才记录堆栈和请求详情
+  if (!isProduction) {
+    logData.stack = err.stack;
+    logData.body = sanitizeBody(req.body);
+    logData.query = req.query;
+    logData.params = req.params;
+  }
+
+  console.error('[全局错误处理]', logData);
 
   if (err.isOperational) {
     return res.status(err.statusCode || 400).json({

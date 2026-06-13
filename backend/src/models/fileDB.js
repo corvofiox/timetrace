@@ -97,14 +97,22 @@ const dateUtils = {
   isValidDateString(dateString) {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateString)) return false;
-    
+
     const [year, month, day] = dateString.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    
-    // 检查日期是否有效（特别处理31日的情况）
-    return date.getFullYear() === year && 
-           date.getMonth() === month - 1 && 
-           date.getDate() === day;
+
+    // 验证年份范围（合理范围：1900-2100）
+    if (year < 1900 || year > 2100) return false;
+
+    // 验证月份范围
+    if (month < 1 || month > 12) return false;
+
+    // 获取该月实际天数
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    // 验证日期范围
+    if (day < 1 || day > daysInMonth) return false;
+
+    return true;
   },
   
   // 获取月份的天数（正确处理31日的情况）
@@ -144,15 +152,16 @@ const users = {
 
   // 创建用户
   create: async (userData) => {
-    const allUsers = await readJsonFile(USERS_FILE);
-    const newUser = {
-      id: await generateId('users'),
-      ...userData,
-      createdAt: new Date()
-    };
-    allUsers.push(newUser);
-    await writeJsonFile(USERS_FILE, allUsers);
-    return newUser;
+    const email = userData.email;
+    return await atomicUpdate(USERS_FILE, async (allUsers) => {
+      const newUser = {
+        id: await generateId('users'),
+        ...userData,
+        createdAt: new Date()
+      };
+      allUsers.push(newUser);
+      return allUsers;
+    }).then((allUsers) => allUsers.find(u => u.email === email));
   }
 };
 
@@ -172,47 +181,47 @@ const goals = {
 
   // 创建目标
   create: async (goalData) => {
-    const allGoals = await readJsonFile(GOALS_FILE);
-    const newGoal = {
-      id: await generateId('goals'),
-      ...goalData,
-      createdAt: new Date()
-    };
-    allGoals.push(newGoal);
-    await writeJsonFile(GOALS_FILE, allGoals);
-    return newGoal;
+    const title = goalData.title;
+    const userId = goalData.userId;
+    return await atomicUpdate(GOALS_FILE, async (allGoals) => {
+      const newGoal = {
+        id: await generateId('goals'),
+        ...goalData,
+        createdAt: new Date()
+      };
+      allGoals.push(newGoal);
+      return allGoals;
+    }).then((allGoals) => allGoals.find(g => g.title === title && g.userId === userId));
   },
 
   // 更新目标
   update: async (id, goalData) => {
-    const allGoals = await readJsonFile(GOALS_FILE);
     const idStr = id.toString();
-    const index = allGoals.findIndex(goal => goal.id.toString() === idStr);
-    if (index !== -1) {
-      // 确保只更新提供的字段，保留其他字段不变
-      const updatedGoal = {
-        ...allGoals[index],
-        ...goalData,
-        updatedAt: new Date()
-      };
-      allGoals[index] = updatedGoal;
-      await writeJsonFile(GOALS_FILE, allGoals);
-      return updatedGoal;
-    }
-    return null;
+    return await atomicUpdate(GOALS_FILE, (allGoals) => {
+      const index = allGoals.findIndex(goal => goal.id.toString() === idStr);
+      if (index !== -1) {
+        allGoals[index] = {
+          ...allGoals[index],
+          ...goalData,
+          updatedAt: new Date()
+        };
+      }
+      return allGoals;
+    }).then((allGoals) => allGoals.find(goal => goal.id.toString() === idStr) || null);
   },
 
   // 删除目标
   delete: async (id) => {
-    const allGoals = await readJsonFile(GOALS_FILE);
     const idStr = id.toString();
-    const index = allGoals.findIndex(goal => goal.id.toString() === idStr);
-    if (index !== -1) {
-      const deletedGoal = allGoals.splice(index, 1)[0];
-      await writeJsonFile(GOALS_FILE, allGoals);
-      return deletedGoal;
-    }
-    return null;
+    let deletedGoal = null;
+    await atomicUpdate(GOALS_FILE, (allGoals) => {
+      const index = allGoals.findIndex(goal => goal.id.toString() === idStr);
+      if (index !== -1) {
+        deletedGoal = allGoals.splice(index, 1)[0];
+      }
+      return allGoals;
+    });
+    return deletedGoal;
   },
 
   // 批量更新目标顺序
@@ -384,35 +393,39 @@ const days = {
 
   // 删除日计划
   delete: async (id) => {
-    const allDays = await readJsonFile(DAYS_FILE);
-    const index = allDays.findIndex(day => day.id === id);
-    if (index !== -1) {
-      const deletedDay = allDays.splice(index, 1)[0];
-      await writeJsonFile(DAYS_FILE, allDays);
-      return deletedDay;
-    }
-    return null;
+    const idStr = id.toString();
+    let deletedDay = null;
+    await atomicUpdate(DAYS_FILE, (allDays) => {
+      const index = allDays.findIndex(day => day.id.toString() === idStr);
+      if (index !== -1) {
+        deletedDay = allDays.splice(index, 1)[0];
+      }
+      return allDays;
+    });
+    return deletedDay;
   },
 
   batchUpdate: async (days) => {
     return await atomicUpdate(DAYS_FILE, (allDays) => {
       const allDaysMap = new Map();
       allDays.forEach(day => {
-        allDaysMap.set(day.date, day);
+        const key = `${day.date}:${day.userId || ''}`;
+        allDaysMap.set(key, day);
       });
       
       days.forEach(day => {
+        const key = `${day.date}:${day.userId || ''}`;
         const isSummaryEmpty = !day.summary || day.summary.trim() === '';
         const areTasksEmpty = !day.tasks || day.tasks.length === 0;
         
         if (isSummaryEmpty && areTasksEmpty) {
-          allDaysMap.delete(day.date);
+          allDaysMap.delete(key);
         } else {
-          const existingDay = allDaysMap.get(day.date);
+          const existingDay = allDaysMap.get(key);
           if (existingDay && existingDay.id) {
             day.id = existingDay.id;
           }
-          allDaysMap.set(day.date, day);
+          allDaysMap.set(key, day);
         }
       });
       
@@ -430,97 +443,92 @@ const refreshTokens = {
 
   // 保存刷新令牌
   save: async (token, userId) => {
-    const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    
-    // 检查是否已存在该用户的刷新令牌，如果存在则删除旧令牌
-    const existingTokenIndex = allTokens.findIndex(rt => rt.userId === userId);
-    if (existingTokenIndex !== -1) {
-      allTokens.splice(existingTokenIndex, 1);
-    }
-    
-    // 添加新令牌
-    allTokens.push({
-      token,
-      userId,
-      createdAt: new Date()
+    await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const existingTokenIndex = allTokens.findIndex(rt => rt.userId === userId);
+      if (existingTokenIndex !== -1) {
+        allTokens.splice(existingTokenIndex, 1);
+      }
+      allTokens.push({
+        token,
+        userId,
+        createdAt: new Date()
+      });
+      return allTokens;
     });
-    
-    await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
   },
 
   // 查找刷新令牌（同时验证是否过期）
-  find: async (token) => {
-    const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    const found = allTokens.find(rt => rt.token === token);
+  find: async (token, maxAgeDays = 7) => {
+    return await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const found = allTokens.find(rt => rt.token === token);
+      if (!found) return allTokens;
 
-    if (!found) return null;
+      const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+      const createdAt = new Date(found.createdAt);
+      const age = Date.now() - createdAt.getTime();
 
-    // 验证令牌是否过期（默认7天）
-    const maxAgeDays = 7;
-    const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
-    const createdAt = new Date(found.createdAt);
-    const age = Date.now() - createdAt.getTime();
-
-    if (age > maxAgeMs) {
-      // 令牌已过期，删除它
-      const index = allTokens.findIndex(rt => rt.token === token);
-      if (index !== -1) {
-        allTokens.splice(index, 1);
-        await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
+      if (age > maxAgeMs) {
+        const index = allTokens.findIndex(rt => rt.token === token);
+        if (index !== -1) {
+          allTokens.splice(index, 1);
+        }
       }
-      return null;
-    }
-
-    return found;
+      return allTokens;
+    }).then((allTokens) => {
+      return allTokens.find(rt => rt.token === token) || null;
+    });
   },
 
   // 删除刷新令牌
   delete: async (token) => {
-    const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    const index = allTokens.findIndex(rt => rt.token === token);
-    if (index !== -1) {
-      const deletedToken = allTokens.splice(index, 1)[0];
-      await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
-      return deletedToken;
-    }
-    return null;
+    let deletedToken = null;
+    await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const index = allTokens.findIndex(rt => rt.token === token);
+      if (index !== -1) {
+        deletedToken = allTokens.splice(index, 1)[0];
+      }
+      return allTokens;
+    });
+    return deletedToken;
   },
 
   // 删除用户的所有刷新令牌
   deleteAllByUserId: async (userId) => {
-    const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    const initialLength = allTokens.length;
-    for (let i = allTokens.length - 1; i >= 0; i--) {
-      if (allTokens[i].userId === userId) {
-        allTokens.splice(i, 1);
+    let removedCount = 0;
+    await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const initialLength = allTokens.length;
+      for (let i = allTokens.length - 1; i >= 0; i--) {
+        if (allTokens[i].userId === userId) {
+          allTokens.splice(i, 1);
+        }
       }
-    }
-    await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
-    return initialLength - allTokens.length;
+      removedCount = initialLength - allTokens.length;
+      return allTokens;
+    });
+    return removedCount;
   },
 
   // 清理过期的刷新令牌
   cleanExpiredTokens: async (maxAgeDays = 7) => {
-    const allTokens = await readJsonFile(REFRESH_TOKENS_FILE);
-    const initialLength = allTokens.length;
-    const now = new Date();
-    const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
-    
-    for (let i = allTokens.length - 1; i >= 0; i--) {
-      const token = allTokens[i];
-      const createdAt = new Date(token.createdAt);
-      const age = now - createdAt;
+    let removedCount = 0;
+    await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const initialLength = allTokens.length;
+      const now = new Date();
+      const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
       
-      if (age > maxAgeMs) {
-        allTokens.splice(i, 1);
+      for (let i = allTokens.length - 1; i >= 0; i--) {
+        const token = allTokens[i];
+        const createdAt = new Date(token.createdAt);
+        const age = now - createdAt;
+        
+        if (age > maxAgeMs) {
+          allTokens.splice(i, 1);
+        }
       }
-    }
-    
-    if (allTokens.length !== initialLength) {
-      await writeJsonFile(REFRESH_TOKENS_FILE, allTokens);
-    }
-    
-    return initialLength - allTokens.length;
+      removedCount = initialLength - allTokens.length;
+      return allTokens;
+    });
+    return removedCount;
   }
 };
 
