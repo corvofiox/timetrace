@@ -325,10 +325,6 @@ body {
     background-color: rgba(74, 108, 247, 0.15);
 }
 
-.calendar-day.has-content-past {
-    background-color: rgba(255, 107, 107, 0.15);
-}
-
 /* 新的过往日期样式 */
 .calendar-day.has-content-past-completed {
     background-color: rgba(76, 175, 80, 0.15);
@@ -420,18 +416,6 @@ body {
 .goal-card.drag-over {
     border-top: 3px solid var(--primary-color);
     transform: translateY(2px);
-}
-
-/* 拖拽加载指示器 */
-.loading-indicator {
-    text-align: center;
-    padding: 1rem;
-    color: var(--primary-color);
-    font-weight: 500;
-    background-color: rgba(255, 255, 255, 0.8);
-    border-radius: var(--radius-md);
-    margin: 0.5rem 0;
-    box-shadow: var(--shadow-sm);
 }
 
 .goal-header {

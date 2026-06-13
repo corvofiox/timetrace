@@ -6,6 +6,8 @@ const CONSTANTS = {
     SAVE_FEEDBACK_DELAY: 800
 };
 
+let countdownTimer = null;
+
 // 确保 ErrorHandler 可用（备用机制）
 if (typeof window !== 'undefined' && !window.ErrorHandler) {
     window.ErrorHandler = {
@@ -1880,12 +1882,6 @@ const userSettings = {
         if (elements.userSettingsModal) {
             elements.userSettingsModal.classList.remove('active');
         }
-        
-        // 备用方法：直接通过ID获取并关闭
-        const modal = document.getElementById('user-settings-modal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
     },
     
     // 保存设置
@@ -1947,12 +1943,11 @@ const userSettings = {
     
     // 应用主题
     applyTheme(theme) {
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            appContainer.classList.remove('theme-blue', 'theme-green');
+        if (elements.appContainer) {
+            elements.appContainer.classList.remove('theme-blue', 'theme-green');
             
             if (theme !== 'default') {
-                appContainer.classList.add(`theme-${theme}`);
+                elements.appContainer.classList.add(`theme-${theme}`);
             }
         }
     },
@@ -2024,7 +2019,6 @@ const stats = {
 };
 
 // 倒计时更新
-let countdownTimer = null;
 const countdown = {
     _boundHandleVisibility: null,
 
@@ -2128,8 +2122,8 @@ function checkAuthStatus() {
                 
                 // 显示用户名
                 if (user && user.username) {
-                    const userWelcome = document.getElementById('user-welcome');
-                    const usernameDisplay = document.getElementById('username-display');
+                    const userWelcome = elements.userWelcome;
+                    const usernameDisplay = elements.usernameDisplay;
                     
                     if (userWelcome && usernameDisplay) {
                         usernameDisplay.textContent = user.username;
@@ -2167,8 +2161,8 @@ function showApp() {
     
     // 显示用户名
     if (appData.user && appData.user.username) {
-        const userWelcome = document.getElementById('user-welcome');
-        const usernameDisplay = document.getElementById('username-display');
+        const userWelcome = elements.userWelcome;
+        const usernameDisplay = elements.usernameDisplay;
         
         if (userWelcome && usernameDisplay) {
             usernameDisplay.textContent = appData.user.username;
@@ -2744,9 +2738,8 @@ function handleLogout(e) {
     userSettings.applyTheme(appData.settings.theme);
     
     // 隐藏用户名显示区域
-    const userWelcome = document.getElementById('user-welcome');
-    if (userWelcome) {
-        userWelcome.style.display = 'none';
+    if (elements.userWelcome) {
+        elements.userWelcome.style.display = 'none';
     }
     
     // 确保显示登录表单，而不是注册表单

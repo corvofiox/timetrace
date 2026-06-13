@@ -266,15 +266,8 @@ async function startServices() {
   });
   
   // 保持进程运行
-  if (process.platform === 'win32') {
-    // Windows平台
-    backendProcess.unref();
-    frontendProcess.unref();
-  } else {
-    // Unix/Linux平台
-    backendProcess.unref();
-    frontendProcess.unref();
-  }
+  backendProcess.unref();
+  frontendProcess.unref();
 }
 
 // 主函数
