@@ -115,16 +115,6 @@ const ErrorHandler = {
       return;
     }
     
-    if (typeof showToast === 'function') {
-      showToast(message, 'error');
-      return;
-    }
-    
-    if (typeof showNotification === 'function') {
-      showNotification(message, 'error');
-      return;
-    }
-    
     alert(message);
   },
 

@@ -370,7 +370,6 @@ const elements = {
     functionsMenuBtn: document.getElementById('functions-menu-btn'),
     functionsDropdown: document.getElementById('functions-dropdown'),
     chartPeriod: document.getElementById('chart-period'),
-    chartGoal: document.getElementById('chart-goal'),
     avgCompletion: document.getElementById('avg-completion'),
     maxCompletion: document.getElementById('max-completion'),
     minCompletion: document.getElementById('min-completion'),
@@ -1909,27 +1908,8 @@ const chart = {
             default: return '';
         }
     },
-    
-    // 十六进制颜色转RGBA
-    hexToRgba(hex, alpha) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    },
-    
-    // 更新目标选项
-    updateGoalOptions() {
-        elements.chartGoal.innerHTML = '<option value="all">所有目标</option>';
-        
-        appData.goals.forEach(goal => {
-            const option = document.createElement('option');
-            option.value = goal.id;
-            option.textContent = goal.title;
-            elements.chartGoal.appendChild(option);
-        });
-    }
 };
+
 
 // 用户设置功能
 const userSettings = {
@@ -2325,7 +2305,18 @@ function loadGoals() {
 
 // 加载日计划数据
 function loadDays() {
-    const dateRange = utils.getSafeDateRange(appData.currentYear, appData.currentMonth);
+    const year = appData.currentYear;
+    const month = appData.currentMonth;
+    
+    if (dataCache.isMonthCached(year, month)) {
+        const cachedData = dataCache.getCachedMonthData(year, month);
+        cachedData.forEach(day => {
+            appData.dailyPlans[day.date] = day;
+        });
+        return Promise.resolve();
+    }
+    
+    const dateRange = utils.getSafeDateRange(year, month);
     const startDate = dateRange.startDate;
     const endDate = dateRange.endDate;
     
@@ -2335,6 +2326,7 @@ function loadDays() {
             days.forEach(day => {
                 appData.dailyPlans[day.date] = day;
             });
+            dataCache.cacheMonthData(year, month, days);
         })
         .catch(error => {
             if (window.ErrorHandler) {
@@ -2779,8 +2771,6 @@ function handleLogin(e) {
     
     api.login({ email, password })
         .then(data => {
-            // Login successful:
-            localStorage.setItem('token', data.token);
             appData.user = data.user;
             appData.isAuthenticated = true;
             
@@ -2827,8 +2817,6 @@ function handleRegister(e) {
     
     api.register({ username, email, password })
         .then(data => {
-            // Register successful:
-            localStorage.setItem('token', data.token);
             appData.user = data.user;
             appData.isAuthenticated = true;
             // 显示欢迎消息
@@ -3925,7 +3913,7 @@ const notesSearch = {
         appData.currentYear = date.getFullYear();
         
         // 加载该月份的数据
-        await this.loadMonthData(date.getFullYear(), date.getMonth());
+        await loadDays();
         
         // 重新渲染日历
         calendar.render();
@@ -3935,40 +3923,6 @@ const notesSearch = {
         
         // 关闭搜索模态框
         this.close();
-    },
-    
-    // 加载指定月份的数据
-    async loadMonthData(year, month) {
-        // 检查缓存中是否已有该月份数据
-        if (dataCache.isMonthCached(year, month)) {
-            const cachedData = dataCache.getCachedMonthData(year, month);
-            
-            // 将缓存数据加载到应用数据中
-            cachedData.forEach(day => {
-                appData.dailyPlans[day.date] = day;
-            });
-            return;
-        }
-        
-        // 使用getSafeDateRange确保正确处理月末日期（包括31日）
-        const dateRange = utils.getSafeDateRange(year, month);
-        const startDate = dateRange.startDate;
-        const endDate = dateRange.endDate;
-        
-        try {
-            const response = await api.getDays(startDate, endDate);
-            const days = response.data || [];
-            
-            // 将数据加载到应用数据中
-            days.forEach(day => {
-                appData.dailyPlans[day.date] = day;
-            });
-            
-            // 缓存该月份数据
-            dataCache.cacheMonthData(year, month, days);
-        } catch (error) {
-            // 加载月份数据失败: error
-        }
     }
 };
 

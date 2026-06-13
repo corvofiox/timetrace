@@ -541,18 +541,6 @@ let idCounters = {
   days: 1
 };
 
-let savePending = false;
-let saveTimer = null;
-
-const SAVE_INTERVAL = 5000;
-const SAVE_AFTER_GENERATIONS = 10;
-
-let generationCounters = {
-  users: 0,
-  goals: 0,
-  days: 0
-};
-
 const initIdCounters = async () => {
   let release;
   try {
@@ -584,7 +572,6 @@ const saveIdCounters = async () => {
   try {
     release = await lockfile.lock(ID_COUNTERS_FILE, { retries: 3, stale: 10000 });
     await fs.writeFile(ID_COUNTERS_FILE, JSON.stringify(idCounters, null, 2), 'utf8');
-    generationCounters = { users: 0, goals: 0, days: 0 };
   } catch (error) {
     console.error('Failed to save ID counters:', error);
   } finally {
@@ -598,20 +585,8 @@ const saveIdCounters = async () => {
   }
 };
 
-const scheduleSave = () => {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-  }
-  
-  saveTimer = setTimeout(() => {
-    saveIdCounters();
-    saveTimer = null;
-  }, SAVE_INTERVAL);
-};
-
 const generateId = async (type) => {
   const id = idCounters[type]++;
-  generationCounters[type]++;
 
   // 每次生成ID都立即保存，确保数据安全
   await saveIdCounters();
@@ -620,10 +595,6 @@ const generateId = async (type) => {
 };
 
 const cleanup = () => {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-  }
   saveIdCounters();
 };
 
