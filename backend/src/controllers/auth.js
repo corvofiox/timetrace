@@ -28,6 +28,7 @@ const {
   findRefreshToken,
   deleteRefreshToken
 } = require('../models/database');
+const fileDB = require('../models/fileDB');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -92,6 +93,16 @@ exports.register = async (req, res) => {
     if (existingUser) {
       return conflictResponse(res, '该邮箱已被注册', ErrorCodes.REG_EMAIL_EXISTS, {
         field: 'email',
+        reason: 'already_exists'
+      });
+    }
+
+    // Check for duplicate username
+    const allUsers = await fileDB.users.getAll();
+    const existingUsername = allUsers.find(u => u.username === username.trim());
+    if (existingUsername) {
+      return conflictResponse(res, '该用户名已被使用', ErrorCodes.REG_USERNAME_EXISTS, {
+        field: 'username',
         reason: 'already_exists'
       });
     }

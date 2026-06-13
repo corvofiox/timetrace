@@ -418,7 +418,7 @@ const api = {
         },
         
         async createOrUpdate(dayData) {
-            return await api.request('/days/', {
+            return await api.request('/days', {
                 method: 'POST',
                 body: JSON.stringify(dayData)
             });

@@ -80,6 +80,7 @@ const reorderQueue = {
     operations: [],
     isProcessing: false,
     listeners: [], // 监听器列表
+    maxRetries: 5,
     
     // 添加监听器
     addListener(callback) {
@@ -148,10 +149,13 @@ const reorderQueue = {
                 
                 // 如果是网络错误，将操作重新加入队列末尾进行重试
                 if (error.message && error.message.includes('network')) {
-                    this.operations.push(operation);
-                    
-                    // 等待一段时间后重试
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    operation._retries = (operation._retries || 0) + 1;
+                    if (operation._retries <= this.maxRetries) {
+                        this.operations.push(operation);
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    } else {
+                        ErrorHandler.handleAndAlert(error, '目标排序保存', `目标排序保存失败，已重试${this.maxRetries}次，请刷新页面后重试`);
+                    }
                 } else {
                     // 非网络错误也需提示用户
                     ErrorHandler.handleAndAlert(error, '目标排序保存', '目标排序保存失败，请刷新页面后重试');
@@ -785,7 +789,7 @@ const calendar = {
             }
             
             const date = new Date(currentYear, currentMonth, day);
-            const dayElement = calendar.createDayElement(day, date);
+            const dayElement = calendar.createDayElement(day, date, goalsByDate);
             if (dayElement) {
                 elements.calendarDays.appendChild(dayElement);
             }
@@ -856,7 +860,7 @@ const calendar = {
     },
     
     // 创建日期元素
-    createDayElement(day, date) {
+    createDayElement(day, date, goalsByDate) {
         // 检查是否是周末
         const dayOfWeek = date.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -933,16 +937,16 @@ const calendar = {
             dayNumber.appendChild(todayDot);
         }
         
-        // 显示目标标记
-        appData.goals.forEach(goal => {
-            const goalDate = utils.parseDate(goal.date);
-            if (goalDate && goalDate.toDateString() === date.toDateString()) {
+        // 显示目标标记（使用预计算的goalsByDate Map，避免O(n×m)循环）
+        const dayGoals = goalsByDate.get(date.toDateString());
+        if (dayGoals) {
+            dayGoals.forEach(goal => {
                 const marker = document.createElement('div');
                 marker.classList.add('goal-marker');
                 marker.style.backgroundColor = goal.color;
                 dayElement.appendChild(marker);
-            }
-        });
+            });
+        }
         
         // 显示备注标记
         if (hasSummary) {
@@ -2895,6 +2899,10 @@ const batchAddTask = {
         elements.weekdaysStartDate.value = todayStr;
         elements.weekdaysEndDate.value = lastDayStr;
         
+        // 绑定迷你日历事件委托（一次性绑定）
+        this._miniCalendarClickHandler = this.handleMiniCalendarClick.bind(this);
+        elements.miniCalendar.addEventListener('click', this._miniCalendarClickHandler);
+        
         // 生成迷你日历
         this.renderMiniCalendar();
         
@@ -2904,6 +2912,11 @@ const batchAddTask = {
     
     // 关闭模态框
     close() {
+        // 移除迷你日历事件委托
+        if (this._miniCalendarClickHandler) {
+            elements.miniCalendar.removeEventListener('click', this._miniCalendarClickHandler);
+            this._miniCalendarClickHandler = null;
+        }
         elements.batchAddTaskModal.classList.remove('active');
     },
     
@@ -3104,43 +3117,54 @@ const batchAddTask = {
         
         html += '</div>';
         elements.miniCalendar.innerHTML = html;
-        
-        // 添加事件监听器
-        document.getElementById('prev-month-mini').addEventListener('click', () => {
+    },
+
+    // 迷你日历事件委托处理器（在batchAddTask.open()中绑定到elements.miniCalendar）
+    handleMiniCalendarClick(event) {
+        const target = event.target;
+
+        // 上一月按钮
+        const prevBtn = target.closest('#prev-month-mini');
+        if (prevBtn) {
             this.currentMonth--;
             if (this.currentMonth < 0) {
                 this.currentMonth = 11;
                 this.currentYear--;
             }
             this.renderMiniCalendar();
-        });
-        
-        document.getElementById('next-month-mini').addEventListener('click', () => {
+            return;
+        }
+
+        // 下一月按钮
+        const nextBtn = target.closest('#next-month-mini');
+        if (nextBtn) {
             this.currentMonth++;
             if (this.currentMonth > 11) {
                 this.currentMonth = 0;
                 this.currentYear++;
             }
             this.renderMiniCalendar();
-        });
-        
-        // 添加迷你日历标题点击事件
-        document.getElementById('mini-calendar-title').addEventListener('click', () => {
-            // 设置月份选择器的当前年月
+            return;
+        }
+
+        // 迷你日历标题（月份选择器）
+        const title = target.closest('#mini-calendar-title');
+        if (title) {
             monthPicker.selectedYear = this.currentYear;
             monthPicker.selectedMonth = this.currentMonth;
-            monthPicker.open('mini-calendar'); // 传递来源参数
-        });
-        
-        // 添加日期点击事件
-        elements.miniCalendar.querySelectorAll('.mini-calendar-day:not(.other-month)').forEach(dayEl => {
-            dayEl.addEventListener('click', () => {
-                const date = dayEl.dataset.date;
-                this.toggleDateSelection(date);
-            });
-        });
+            monthPicker.open('mini-calendar');
+            return;
+        }
+
+        // 日期点击（仅当前月日期）
+        const dayEl = target.closest('.mini-calendar-day:not(.other-month)');
+        if (dayEl) {
+            const date = dayEl.dataset.date;
+            this.toggleDateSelection(date);
+            return;
+        }
     },
-    
+
     // 检查是否为今天
     isToday(year, month, day) {
         const today = new Date();
@@ -3175,9 +3199,10 @@ const batchAddTask = {
         
         let html = '';
         this.selectedDates.sort().forEach(date => {
+            const safeDate = utils.escapeHtml(date);
             html += `<div class="selected-date-chip">
-                ${date}
-                <span class="remove-date" data-date="${date}">×</span>
+                ${safeDate}
+                <span class="remove-date" data-date="${safeDate}">×</span>
             </div>`;
         });
         

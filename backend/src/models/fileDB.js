@@ -58,7 +58,8 @@ const readJsonFile = async (filePath, retryCount = 0) => {
   }
 };
 
-const writeJsonFile = async (filePath, data) => {
+const writeJsonFile = async (filePath, data, retryCount = 0) => {
+  const MAX_RETRIES = 3;
   let release;
   try {
     await ensureDataDir();
@@ -66,7 +67,12 @@ const writeJsonFile = async (filePath, data) => {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
   } catch (error) {
     if (error.code === 'ELOCKED') {
-      console.error('Lock acquisition failed during write, data may be lost:', filePath, error.message);
+      if (retryCount < MAX_RETRIES) {
+        await sleep(Math.pow(2, retryCount) * 100);
+        return writeJsonFile(filePath, data, retryCount + 1);
+      }
+      console.error('Lock acquisition failed after max retries during write:', filePath, error.message);
+      throw error;
     }
     throw error;
   } finally {

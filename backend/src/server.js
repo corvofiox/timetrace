@@ -88,7 +88,11 @@ app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     `default-src 'self'; ` +
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval'; ` +
+    // script-src: 'unsafe-inline' is required because Chart.js and inline scripts
+    // in index.html inject style/script in a way that CSP strict-dynamic/nonce cannot
+    // easily accommodate in this vanilla JS SPA served as static files.
+    // 'unsafe-eval' has been removed — no eval() usage exists in the codebase.
+    `script-src 'self' 'unsafe-inline'; ` +
     `style-src 'self' 'unsafe-inline'; ` +
     `img-src 'self' data:; ` +
     `font-src 'self'; ` +
@@ -135,7 +139,10 @@ app.use('/api/*', notFoundHandler);
 // 全局错误处理
 app.use(errorHandler);
 
-// 调试端点 - 检查环境变量（仅用于调试，生产环境中应删除）
+// Debug endpoint — disabled in production by ENABLE_DEBUG_ENDPOINTS guard
+// Only accessible when NODE_ENV !== 'production' AND ENABLE_DEBUG_ENDPOINTS === 'true'.
+// This endpoint leaks config state (JWT_SECRET configured, DATA_DIR path, etc.)
+// and must never be enabled in production.
 if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   app.get('/debug/env', (req, res) => {
     res.status(200).json({
