@@ -1447,7 +1447,7 @@ const dayModal = {
                 appData.pendingTaskChanges.deleted = [];
                 
                 // 清除相关月份的缓存，因为数据已更新
-                const date = new Date(dateStr);
+                const date = utils.parseDate(dateStr);
                 dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
                 
                 // 保存操作完成

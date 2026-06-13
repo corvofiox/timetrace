@@ -152,16 +152,17 @@ const users = {
 
   // 创建用户
   create: async (userData) => {
-    const email = userData.email;
-    return await atomicUpdate(USERS_FILE, async (allUsers) => {
-      const newUser = {
+    let savedUser = null;
+    await atomicUpdate(USERS_FILE, async (allUsers) => {
+      savedUser = {
         id: await generateId('users'),
         ...userData,
         createdAt: new Date()
       };
-      allUsers.push(newUser);
+      allUsers.push(savedUser);
       return allUsers;
-    }).then((allUsers) => allUsers.find(u => u.email === email));
+    });
+    return savedUser;
   }
 };
 
@@ -181,17 +182,17 @@ const goals = {
 
   // 创建目标
   create: async (goalData) => {
-    const title = goalData.title;
-    const userId = goalData.userId;
-    return await atomicUpdate(GOALS_FILE, async (allGoals) => {
-      const newGoal = {
+    let savedGoal = null;
+    await atomicUpdate(GOALS_FILE, async (allGoals) => {
+      savedGoal = {
         id: await generateId('goals'),
         ...goalData,
         createdAt: new Date()
       };
-      allGoals.push(newGoal);
+      allGoals.push(savedGoal);
       return allGoals;
-    }).then((allGoals) => allGoals.find(g => g.title === title && g.userId === userId));
+    });
+    return savedGoal;
   },
 
   // 更新目标
