@@ -97,7 +97,7 @@ function sanitizeBody(body) {
   
   const sensitiveFields = ['password', 'confirmPassword', 'token', 'refreshToken', 'secret'];
   sensitiveFields.forEach(field => {
-    if (sanitized[field]) {
+    if (sanitized[field] !== undefined) {
       sanitized[field] = '[REDACTED]';
     }
   });
@@ -132,5 +132,6 @@ function asyncHandler(fn) {
 module.exports = {
   errorHandler,
   notFoundHandler,
-  asyncHandler
+  asyncHandler,
+  sanitizeBody
 };

@@ -158,6 +158,11 @@ const ErrorHandler = {
       message: message || this.errorMessages[code] || '操作失败',
       details: details
     };
+  },
+
+  handleAndAlert(error, context, fallbackMessage) {
+    const result = this.handle(error, context, { silent: true });
+    alert(result.message || fallbackMessage || '操作失败，请稍后重试');
   }
 };
 

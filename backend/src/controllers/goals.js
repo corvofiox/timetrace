@@ -1,5 +1,6 @@
 const {
   getAllGoals,
+  getGoalsByUserId,
   getGoalById,
   createGoal,
   updateGoal,
@@ -15,13 +16,14 @@ const {
   serverErrorResponse
 } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
+const { sanitizeBody } = require('../middleware/errorHandler');
 
 const COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
 const MAX_TITLE_LENGTH = 100;
 
 exports.getGoals = async (req, res) => {
   try {
-    const goals = (await getAllGoals()).filter(goal => goal.userId === req.user.id);
+    const goals = await getGoalsByUserId(req.user.id);
     
     const sortedGoals = goals.sort((a, b) => {
       if (a.order !== undefined && b.order !== undefined) {
@@ -129,7 +131,7 @@ exports.createGoal = async (req, res) => {
       error: error.message,
       stack: error.stack,
       userId: req.user?.id,
-      body: req.body
+      body: sanitizeBody(req.body)
     });
     
     return serverErrorResponse(res, '创建目标失败，请稍后重试');
@@ -298,7 +300,7 @@ exports.reorderGoals = async (req, res) => {
     
     await reorderGoals(goalIds);
     
-    const updatedGoals = (await getAllGoals()).filter(goal => goal.userId === req.user.id);
+    const updatedGoals = await getGoalsByUserId(req.user.id);
     const sortedGoals = updatedGoals.sort((a, b) => a.order - b.order);
     
     console.log('[重排目标成功]', {

@@ -5,6 +5,7 @@ const fileDB = require('./models/fileDB');
 const { initConfig, getRefreshTokenExpireDays } = require('./config/keys');
 const { cleanExpiredRefreshTokens } = require('./models/database');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const rateLimit = require('express-rate-limit');
 
 // 初始化服务器
 const initServer = async () => {
@@ -47,10 +48,30 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Rate limiting for auth routes (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: '请求过于频繁，请稍后重试', errorCode: 'RATE_LIMIT' }
+});
+app.use('/api/auth', authLimiter);
+
+// General API rate limiter for all /api/* routes (100 req/min per IP)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: '请求过于频繁，请稍后重试', errorCode: 'RATE_LIMIT' }
+});
+app.use('/api', apiLimiter);
+
 // Content Security Policy middleware
 app.use((req, res, next) => {
   const allowedHosts = process.env.CSP_ALLOWED_HOSTS 
-    ? process.env.CSP_ALLOWED_HOSTS.split(',').map(h => h.trim())
+    ? process.env.CSP_ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(h => h.length > 0)
     : [];
   
   const host = req.get('host');
@@ -160,10 +181,32 @@ const startServer = async () => {
   // 启动定时清理任务
   scheduleTokenCleanup();
   
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Static files served from: ${getStaticRoot()}`);
   });
+
+  // Graceful shutdown
+  const gracefulShutdown = async (signal) => {
+    console.log(`\n${signal} received, shutting down gracefully...`);
+    server.close(async () => {
+      console.log('HTTP server closed');
+      try {
+        await fileDB.cleanup();
+      } catch (err) {
+        console.error('Cleanup failed:', err);
+      }
+      process.exit(0);
+    });
+    // Force shutdown after 10s
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 };
 
 startServer();

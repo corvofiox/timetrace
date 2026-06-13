@@ -48,8 +48,12 @@ const appData = {
     
     // 保存当前月份到本地存储
     saveCurrentMonth() {
-        localStorage.setItem('currentMonth', this.currentMonth);
-        localStorage.setItem('currentYear', this.currentYear);
+        try {
+            localStorage.setItem('currentMonth', this.currentMonth);
+            localStorage.setItem('currentYear', this.currentYear);
+        } catch (e) {
+            console.error('保存月份到 localStorage 失败:', e);
+        }
     },
     
     // 从本地存储恢复当前月份
@@ -150,10 +154,7 @@ const reorderQueue = {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 } else {
                     // 非网络错误也需提示用户
-                    const handled = window.ErrorHandler ? 
-                        window.ErrorHandler.handle(error, '目标排序保存') : 
-                        { message: error.message || '未知错误' };
-                    alert(handled.message || '目标排序保存失败，请刷新页面后重试');
+                    ErrorHandler.handleAndAlert(error, '目标排序保存', '目标排序保存失败，请刷新页面后重试');
                 }
             }
             
@@ -757,6 +758,17 @@ const calendar = {
             emptyDays = this.calculateEmptyDaysExcludingWeekends(currentYear, currentMonth, startWeekMonday);
         }
         
+        // 预计算目标按日期的映射，避免O(days × goals)循环
+        const goalsByDate = new Map();
+        appData.goals.forEach(goal => {
+            const goalDate = utils.parseDate(goal.date);
+            if (goalDate) {
+                const key = goalDate.toDateString();
+                if (!goalsByDate.has(key)) goalsByDate.set(key, []);
+                goalsByDate.get(key).push(goal);
+            }
+        });
+
         // 添加空白格子，直到当月第一天
         for (let i = 0; i < emptyDays; i++) {
             const emptyDay = document.createElement('div');
@@ -1214,7 +1226,7 @@ const goals = {
             order: appData.goals.length
         };
         
-        api.createGoal(newGoalData)
+        return api.createGoal(newGoalData)
             .then(response => {
                 const newGoal = response.data;
                 appData.goals.push(newGoal);
@@ -1228,18 +1240,20 @@ const goals = {
                 if (!countdownTimer) {
                     countdown.startTimer();
                 }
+                return response;
             })
             .catch(error => {
                 const handled = window.ErrorHandler ? 
                     window.ErrorHandler.handle(error, '添加目标') : 
                     { message: error.message || '未知错误' };
                 alert(handled.message || '添加失败');
+                throw error;
             });
     },
     
     // 更新目标
     update(goalId, goalData) {
-        api.updateGoal(goalId, goalData)
+        return api.updateGoal(goalId, goalData)
             .then(response => {
                 const updatedGoal = response.data;
                 const index = appData.goals.findIndex(goal => goal.id === goalId);
@@ -1251,12 +1265,14 @@ const goals = {
                     
                     goals.forceRender();
                 }
+                return response;
             })
             .catch(error => {
                 const handled = window.ErrorHandler ? 
                     window.ErrorHandler.handle(error, '更新目标') : 
                     { message: error.message || '未知错误' };
                 alert(handled.message || '更新失败');
+                throw error;
             });
     },
     
@@ -1405,6 +1421,9 @@ const dayModal = {
     
     // 保存日计划
     save() {
+        if (this._saving) return;
+        this._saving = true;
+        
         const dateStr = utils.formatDate(appData.selectedDate);
         const summary = elements.dailySummary.value;
         
@@ -1418,6 +1437,7 @@ const dayModal = {
         // 使用API保存
         api.createOrUpdateDay(dailyPlan)
             .then(response => {
+                this._saving = false;
                 const savedDay = response.data;
                 
                 // 检查是否删除了条目
@@ -1451,10 +1471,8 @@ const dayModal = {
                 dayModal.close();
             })
             .catch(error => {
-                const handled = window.ErrorHandler ? 
-                    window.ErrorHandler.handle(error, '保存日计划') : 
-                    { message: error.message || '未知错误' };
-                alert(handled.message || '保存失败');
+                this._saving = false;
+                ErrorHandler.handleAndAlert(error, '保存日计划', '保存失败');
             });
     }
 };
@@ -1504,32 +1522,45 @@ const goalModal = {
     
     // 关闭模态框
     close() {
+        this._saving = false;
         elements.goalModal.classList.remove('active');
         appData.editingGoalId = null;
     },
     
     // 保存目标
     save() {
+        if (this._saving) return;
+        this._saving = true;
+        
         const title = elements.goalName.value.trim();
         const date = elements.goalDate.value;
         const color = elements.goalColor.value;
         
         if (!title || !date) {
+            this._saving = false;
             alert('请填写完整的目标信息');
             return;
         }
         
         const goalData = { title, date, color };
         
+        let savePromise;
         if (appData.editingGoalId) {
             // 更新现有目标
-            goals.update(appData.editingGoalId, goalData);
+            savePromise = goals.update(appData.editingGoalId, goalData);
         } else {
             // 添加新目标
-            goals.add(goalData);
+            savePromise = goals.add(goalData);
         }
         
-        goalModal.close();
+        savePromise
+            .then(() => {
+                this._saving = false;
+                goalModal.close();
+            })
+            .catch(() => {
+                this._saving = false;
+            });
     }
 };
 
@@ -1571,16 +1602,21 @@ const taskInputModal = {
     
     // 关闭模态框
     close() {
+        this._saving = false;
         elements.taskInputModal.classList.remove('active');
         this.editingTaskId = null;
     },
     
     // 保存任务
     save() {
+        if (this._saving) return;
+        this._saving = true;
+        
         const title = elements.taskTitle.value.trim();
         const description = elements.taskInput.value.trim();
         
         if (!title) {
+            this._saving = false;
             alert('请输入任务标题');
             return;
         }
@@ -1912,14 +1948,16 @@ const userSettings = {
         this.applyTheme(appData.settings.theme);
         
         // 保存设置到本地存储，与用户ID关联
-        if (appData.user && appData.user.id) {
-            const settingsKey = `userSettings_${appData.user.id}`;
-            localStorage.setItem(settingsKey, JSON.stringify(appData.settings));
-            // 设置已保存到 localStorage，键名:
-        } else {
-            // 如果用户未登录，使用默认键名
-            localStorage.setItem('userSettings', JSON.stringify(appData.settings));
-            // 设置已保存到 localStorage，使用默认键名
+        try {
+            if (appData.user && appData.user.id) {
+                const settingsKey = `userSettings_${appData.user.id}`;
+                localStorage.setItem(settingsKey, JSON.stringify(appData.settings));
+            } else {
+                // 如果用户未登录，使用默认键名
+                localStorage.setItem('userSettings', JSON.stringify(appData.settings));
+            }
+        } catch (e) {
+            console.error('保存设置到 localStorage 失败:', e);
         }
         
         // 重新渲染日历以应用设置
@@ -2121,7 +2159,7 @@ function checkAuthStatus() {
     const token = localStorage.getItem('token');
     if (token) {
         // 验证token有效性
-        api.getMe()
+        api.auth.getMe()
             .then(response => {
                 const user = response.data;
                 appData.user = user;
@@ -2144,7 +2182,7 @@ function checkAuthStatus() {
                 showApp();
             })
             .catch(error => {
-                localStorage.removeItem('token');
+                api.removeTokens();
                 showAuth();
             });
     } else {
@@ -2441,10 +2479,7 @@ function bindEvents() {
                 calendar.render();
                 stats.update();
             } catch (error) {
-                const handled = window.ErrorHandler ?
-                    window.ErrorHandler.handle(error, '保存日计划') :
-                    { message: error.message || '未知错误' };
-                alert(handled.message || '保存失败');
+                ErrorHandler.handleAndAlert(error, '保存日计划', '保存失败');
             }
 
             return;
@@ -2657,12 +2692,16 @@ function bindEvents() {
 function handleLogin(e) {
     e.preventDefault();
     
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    
     const email = elements.loginEmail.value;
     const password = elements.loginPassword.value;
     
     // Email:, Password:
     
     if (!email || !password) {
+        if (submitBtn) submitBtn.disabled = false;
         alert('请输入邮箱和密码');
         return;
     }
@@ -2679,26 +2718,29 @@ function handleLogin(e) {
             showApp();
         })
         .catch(error => {
-            const handled = window.ErrorHandler ? 
-                window.ErrorHandler.handle(error, '登录') : 
-                { message: error.message || '未知错误' };
-            alert(handled.message || '登录失败');
+            if (submitBtn) submitBtn.disabled = false;
+            ErrorHandler.handleAndAlert(error, '登录', '登录失败');
         });
 }
 
 function handleRegister(e) {
     e.preventDefault();
     
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    
     const username = elements.registerUsername.value;
     const email = elements.registerEmail.value;
     const password = elements.registerPassword.value;
     
     if (!username || !email || !password) {
+        if (submitBtn) submitBtn.disabled = false;
         alert('请填写所有必填字段');
         return;
     }
     
     if (password.length < 6) {
+        if (submitBtn) submitBtn.disabled = false;
         alert('密码长度至少为6位');
         return;
     }
@@ -2712,10 +2754,8 @@ function handleRegister(e) {
             showApp();
         })
         .catch(error => {
-            const handled = window.ErrorHandler ? 
-                window.ErrorHandler.handle(error, '注册') : 
-                { message: error.message || '未知错误' };
-            alert(handled.message || '注册失败');
+            if (submitBtn) submitBtn.disabled = false;
+            ErrorHandler.handleAndAlert(error, '注册', '注册失败');
         });
 }
 
@@ -2906,10 +2946,10 @@ const batchAddTask = {
         taskItem.classList.add('task-item');
         
         // 只显示任务标题
-        let taskDisplay = task.title;
+        const safeDisplay = utils.escapeHtml(task.title);
         
         taskItem.innerHTML = `
-            <div class="task-text">${taskDisplay}</div>
+            <div class="task-text">${safeDisplay}</div>
             <div class="task-actions">
                 <button class="btn btn-icon btn-sm edit-batch-task" data-id="${task.id}">
                     <i class="ri-edit-line"></i>
@@ -3349,10 +3389,11 @@ const batchAddTask = {
                             
                             displayTasks.forEach(title => {
                                 const taskDates = tasksByTitle[title];
+                                const safeTitle = utils.escapeHtml(title);
                                 const dateStr = taskDates.length > 3 
                                     ? `(共${taskDates.length}个日期)`
                                     : `(${taskDates.join(', ')})`;
-                                html += `<li>${title} <span class="task-date">${dateStr}</span></li>`;
+                                html += `<li>${safeTitle} <span class="task-date">${dateStr}</span></li>`;
                             });
                             
                             if (taskTitles.length > 3) {
@@ -3396,7 +3437,7 @@ const batchAddTask = {
             html += '<h5><i class="ri-add-line"></i> 将添加的新任务:</h5>';
             html += '<ul class="preview-task-list new-tasks">';
             this.tasks.forEach(task => {
-                html += `<li>${task.title}</li>`;
+                html += `<li>${utils.escapeHtml(task.title)}</li>`;
             });
             html += '</ul></div>';
         }

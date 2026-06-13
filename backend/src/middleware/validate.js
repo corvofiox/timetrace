@@ -2,6 +2,23 @@ const { validationErrorResponse } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
 const { dateUtils } = require('../models/fileDB');
 
+/**
+ * Validation utilities for timetrace API.
+ *
+ * INDIVIDUAL VALIDATORS (validateRequired, validateString, validateEmail, etc.)
+ * can be called directly in controllers for fine-grained validation.
+ *
+ * ROUTE-LEVEL MIDDLEWARE: The `validate()` composable wraps any combination of
+ * validators as Express middleware.
+ *
+ * Usage example:
+ *   const { validate, validateRequired, validateEmail } = require('./validate');
+ *   router.post('/login', validate([
+ *     { field: 'email', validations: [{ type: 'email', fieldName: '邮箱' }] },
+ *     { field: 'password', validations: [{ type: 'password', fieldName: '密码' }] }
+ *   ]), authController.login);
+ */
+
 function validateRequired(value, fieldName) {
   if (value === undefined || value === null || value === '') {
     return {
@@ -266,5 +283,13 @@ function validate(rules) {
 }
 
 module.exports = {
-  validateString
+  validateRequired,
+  validateString,
+  validateEmail,
+  validatePassword,
+  validateDate,
+  validateTime,
+  validateColor,
+  validateArray,
+  validate
 };

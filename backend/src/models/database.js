@@ -34,6 +34,12 @@ const getAllGoals = async () => {
   return await fileDB.goals.getAll();
 };
 
+// 根据用户ID获取目标（性能优化版本）
+const getGoalsByUserId = async (userId) => {
+  await ensureDBInitialized();
+  return await fileDB.goals.getByUserId(userId);
+};
+
 // 根据ID获取目标
 const getGoalById = async (id) => {
   await ensureDBInitialized();
@@ -67,6 +73,12 @@ const reorderGoals = async (goalIds) => {
 const getAllDays = async () => {
   await ensureDBInitialized();
   return await fileDB.days.getAll();
+};
+
+// 根据用户ID获取日计划（性能优化版本）
+const getDaysByUserId = async (userId) => {
+  await ensureDBInitialized();
+  return await fileDB.days.getByUserId(userId);
 };
 
 // 获取指定日期范围内的日计划（性能优化版本）
@@ -147,12 +159,14 @@ module.exports = {
   findUserById,
   createUser,
   getAllGoals,
+  getGoalsByUserId,
   getGoalById,
   createGoal,
   updateGoal,
   deleteGoal,
   reorderGoals,
   getAllDays,
+  getDaysByUserId,
   getDaysByDateRange,
   searchDaysByKeyword,
   getDayById,

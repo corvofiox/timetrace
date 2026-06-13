@@ -63,5 +63,6 @@ module.exports = {
   notFoundResponse,
   createdResponse,
   conflictResponse,
-  serverErrorResponse
+  serverErrorResponse,
+  appErrorResponse
 };

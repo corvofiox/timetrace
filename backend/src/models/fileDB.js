@@ -17,7 +17,10 @@ const ensureDataDir = async () => {
   }
 };
 
-const readJsonFile = async (filePath) => {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const readJsonFile = async (filePath, retryCount = 0) => {
+  const MAX_RETRIES = 3;
   let release;
   try {
     await ensureDataDir();
@@ -31,7 +34,16 @@ const readJsonFile = async (filePath) => {
     if (error.code === 'ENOENT') {
       return [];
     }
-    if (error instanceof SyntaxError && error.message.includes('Unexpected end of JSON input')) {
+    if (error.code === 'ELOCKED') {
+      if (retryCount < MAX_RETRIES) {
+        await sleep(Math.pow(2, retryCount) * 100);
+        return readJsonFile(filePath, retryCount + 1);
+      }
+      console.error('Lock acquisition failed after max retries:', filePath);
+      return [];
+    }
+    if (error instanceof SyntaxError) {
+      console.warn('Corrupted JSON file, returning empty array:', filePath, error.message);
       return [];
     }
     throw error;
@@ -52,6 +64,11 @@ const writeJsonFile = async (filePath, data) => {
     await ensureDataDir();
     release = await lockfile.lock(filePath, { retries: 5, stale: 10000, minTimeout: 50, maxTimeout: 200 });
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    if (error.code === 'ELOCKED') {
+      console.error('Lock acquisition failed during write, data may be lost:', filePath, error.message);
+    }
+    throw error;
   } finally {
     if (release) {
       try {
@@ -78,6 +95,10 @@ const atomicUpdate = async (filePath, updateFn) => {
       const updatedData = await updateFn([]);
       await fs.writeFile(filePath, JSON.stringify(updatedData, null, 2), 'utf8');
       return updatedData;
+    }
+    if (error.code === 'ELOCKED') {
+      console.error('Lock acquisition failed during atomic update:', filePath, error.message);
+      throw error;
     }
     throw error;
   } finally {
@@ -173,6 +194,12 @@ const goals = {
     return await readJsonFile(GOALS_FILE);
   },
 
+  // 根据用户ID获取目标（性能优化：过滤在DB层完成）
+  getByUserId: async (userId) => {
+    const allGoals = await readJsonFile(GOALS_FILE);
+    return allGoals.filter(goal => goal.userId === userId);
+  },
+
   // 根据ID查找目标
   findById: async (id) => {
     const allGoals = await readJsonFile(GOALS_FILE);
@@ -237,7 +264,8 @@ const goals = {
             updatedAt: new Date()
           };
         }
-        return goal;
+        // Reset stale order values for goals not in the reorder list
+        return { ...goal, order: undefined };
       });
     });
   }
@@ -248,6 +276,12 @@ const days = {
   // 获取所有日计划
   getAll: async () => {
     return await readJsonFile(DAYS_FILE);
+  },
+
+  // 根据用户ID获取日计划（性能优化：过滤在DB层完成）
+  getByUserId: async (userId) => {
+    const allDays = await readJsonFile(DAYS_FILE);
+    return allDays.filter(day => day.userId === userId);
   },
 
   // 获取指定日期范围内的日计划（性能优化版本）
@@ -334,7 +368,12 @@ const days = {
 
     try {
       return await atomicUpdate(DAYS_FILE, async (allDays) => {
-        const existingDay = allDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+        let existingDay = allDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+        
+        // 如果日期+用户ID查找未匹配，尝试通过ID查找（更新场景的兜底）
+        if (!existingDay && dayData.id) {
+          existingDay = allDays.find(day => day.id.toString() === dayData.id.toString());
+        }
 
         if (shouldDelete) {
           // 如果备注和任务都为空，删除现有条目（如果存在）
@@ -445,6 +484,8 @@ const refreshTokens = {
   },
 
   // 保存刷新令牌
+  // NOTE: This replaces any existing token for the same userId (intentional single-session behavior).
+  // Each user can only have one active refresh token at a time.
   save: async (token, userId) => {
     await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
       const existingTokenIndex = allTokens.findIndex(rt => rt.userId === userId);
@@ -575,7 +616,12 @@ const saveIdCounters = async () => {
     release = await lockfile.lock(ID_COUNTERS_FILE, { retries: 3, stale: 10000 });
     await fs.writeFile(ID_COUNTERS_FILE, JSON.stringify(idCounters, null, 2), 'utf8');
   } catch (error) {
-    console.error('Failed to save ID counters:', error);
+    if (error.code === 'ENOENT') {
+      // File doesn't exist yet, create it with default counters
+      await fs.writeFile(ID_COUNTERS_FILE, JSON.stringify(idCounters, null, 2), 'utf8');
+    } else {
+      console.error('Failed to save ID counters:', error);
+    }
   } finally {
     if (release) {
       try {
@@ -588,27 +634,53 @@ const saveIdCounters = async () => {
 };
 
 const generateId = async (type) => {
-  const id = idCounters[type]++;
-
-  // 每次生成ID都立即保存，确保数据安全
-  await saveIdCounters();
-
-  return id;
+  // Use atomic read-increment-write to ensure ID counter consistency
+  let release;
+  try {
+    release = await lockfile.lock(ID_COUNTERS_FILE, { retries: 5, stale: 10000 });
+    let counters;
+    try {
+      const data = await fs.readFile(ID_COUNTERS_FILE, 'utf8');
+      counters = JSON.parse(data);
+    } catch (e) {
+      if (e.code === 'ENOENT') {
+        counters = {};
+      } else {
+        throw e;
+      }
+    }
+    if (!(type in counters)) {
+      counters[type] = 1;
+    }
+    const id = counters[type]++;
+    // Update in-memory copy and persist
+    idCounters[type] = counters[type];
+    await fs.writeFile(ID_COUNTERS_FILE, JSON.stringify(counters, null, 2), 'utf8');
+    return id;
+  } catch (error) {
+    // Fallback: use in-memory counter if file operations fail
+    const id = idCounters[type] || 0;
+    idCounters[type] = id + 1;
+    console.error('Atomic ID generation failed, using in-memory fallback:', error);
+    return id;
+  } finally {
+    if (release) {
+      try {
+        await release();
+      } catch (e) {
+        console.error('Failed to release lock:', e);
+      }
+    }
+  }
 };
 
-const cleanup = () => {
-  saveIdCounters();
+const cleanup = async () => {
+  await saveIdCounters();
 };
 
 process.on('beforeExit', cleanup);
-process.on('SIGINT', () => {
-  cleanup();
-  process.exit(0);
-});
-process.on('SIGTERM', () => {
-  cleanup();
-  process.exit(0);
-});
+
+// SIGTERM/SIGINT handled by server.js for graceful shutdown
 
 // 初始化函数，确保数据目录和ID计数器存在
 const init = async () => {
@@ -623,5 +695,6 @@ module.exports = {
   refreshTokens,
   generateId,
   init,
+  cleanup,
   dateUtils
 };

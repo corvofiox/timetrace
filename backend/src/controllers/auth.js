@@ -268,7 +268,16 @@ exports.refreshToken = async (req, res) => {
       process.env.JWT_EXPIRE || '15m'
     );
 
-    successResponse(res, { token: newToken });
+    // Rotate refresh token: delete old, create new
+    await deleteRefreshToken(refreshToken);
+
+    const newRefreshToken = createRefreshToken(
+      { id: user.id },
+      process.env.REFRESH_TOKEN_EXPIRE || '7d'
+    );
+    await saveRefreshToken(newRefreshToken, user.id);
+
+    successResponse(res, { token: newToken, refreshToken: newRefreshToken });
   } catch (error) {
     console.error('[刷新令牌失败]', {
       error: error.message,

@@ -1,5 +1,6 @@
 const {
   getAllDays,
+  getDaysByUserId,
   getDaysByDateRange,
   searchDaysByKeyword,
   getDayById,
@@ -79,6 +80,28 @@ function validateTimeEntry(entry, index) {
   return errors;
 }
 
+async function validateTimeEntriesWithGoals(timeEntries, userId) {
+  for (let i = 0; i < timeEntries.length; i++) {
+    const entry = timeEntries[i];
+    
+    if (entry.goalId && entry.goalId.toString().trim() !== '') {
+      const goal = await getGoalById(entry.goalId);
+      if (!goal) {
+        return { error: { response: validationErrorResponse, args: [`时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, { field: `timeEntries[${i}].goalId`, goalId: entry.goalId, index: i }] } };
+      }
+      if (goal.userId !== userId) {
+        return { error: { response: unauthorizedResponse, args: [`时间条目关联的目标不属于您`, ErrorCodes.GOAL_NO_PERMISSION, { field: `timeEntries[${i}].goalId`, goalId: entry.goalId }] } };
+      }
+    }
+    
+    const entryErrors = validateTimeEntry(entry, i);
+    if (entryErrors.length > 0) {
+      return { error: { response: validationErrorResponse, args: [entryErrors[0].message, ErrorCodes.DAY_TIME_INVALID, { field: entryErrors[0].field, errors: entryErrors }] } };
+    }
+  }
+  return { error: null };
+}
+
 exports.getDays = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -115,8 +138,7 @@ exports.getDays = async (req, res) => {
         data: days
       });
     } else {
-      let days = await getAllDays();
-      days = days.filter(day => day.userId === req.user.id);
+      const days = await getDaysByUserId(req.user.id);
       
       successResponse(res, {
         count: days.length,
@@ -183,14 +205,8 @@ exports.getDayByDate = async (req, res) => {
     const day = await getDayByDate(dateParam, req.user.id);
     
     if (!day) {
-      return successResponse(res, {
-        data: {
-          date: dateParam,
-          userId: req.user.id,
-          summary: '',
-          tasks: [],
-          timeEntries: []
-        }
+      return notFoundResponse(res, '未找到该日期的日计划', ErrorCodes.DAY_NOT_FOUND, {
+        date: dateParam
       });
     }
     
@@ -226,35 +242,12 @@ exports.createOrUpdateDay = async (req, res) => {
     }
 
     if (timeEntries && Array.isArray(timeEntries)) {
-      for (let i = 0; i < timeEntries.length; i++) {
-        const entry = timeEntries[i];
-        
-        if (entry.goalId && entry.goalId.toString().trim() !== '') {
-          const goal = await getGoalById(entry.goalId);
-          if (!goal) {
-            return validationErrorResponse(res, `时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, {
-              field: `timeEntries[${i}].goalId`,
-              goalId: entry.goalId,
-              index: i
-            });
-          }
-          if (goal.userId !== req.user.id) {
-            return unauthorizedResponse(res, `时间条目关联的目标不属于您`, ErrorCodes.GOAL_NO_PERMISSION, {
-              field: `timeEntries[${i}].goalId`,
-              goalId: entry.goalId
-            });
-          }
-        }
-        
-        const entryErrors = validateTimeEntry(entry, i);
-        if (entryErrors.length > 0) {
-          return validationErrorResponse(res, entryErrors[0].message, ErrorCodes.DAY_TIME_INVALID, {
-            field: entryErrors[0].field,
-            errors: entryErrors
-          });
-        }
+      const validation = await validateTimeEntriesWithGoals(timeEntries, req.user.id);
+      if (validation.error) {
+        return validation.error.response(res, ...validation.error.args);
       }
     }
+    
     
     const dayData = {
       ...req.body,
@@ -314,36 +307,13 @@ exports.updateDay = async (req, res) => {
     const { timeEntries } = req.body;
     
     if (timeEntries && Array.isArray(timeEntries)) {
-      for (let i = 0; i < timeEntries.length; i++) {
-        const entry = timeEntries[i];
-        
-        if (entry.goalId && entry.goalId.toString().trim() !== '') {
-          const goal = await getGoalById(entry.goalId);
-          if (!goal) {
-            return validationErrorResponse(res, `时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, {
-              field: `timeEntries[${i}].goalId`,
-              goalId: entry.goalId
-            });
-          }
-          if (goal.userId !== req.user.id) {
-            return unauthorizedResponse(res, `时间条目关联的目标不属于您`, ErrorCodes.GOAL_NO_PERMISSION, {
-              field: `timeEntries[${i}].goalId`,
-              goalId: entry.goalId
-            });
-          }
-        }
-        
-        const entryErrors = validateTimeEntry(entry, i);
-        if (entryErrors.length > 0) {
-          return validationErrorResponse(res, entryErrors[0].message, ErrorCodes.DAY_TIME_INVALID, {
-            field: entryErrors[0].field,
-            errors: entryErrors
-          });
-        }
+      const validation = await validateTimeEntriesWithGoals(timeEntries, req.user.id);
+      if (validation.error) {
+        return validation.error.response(res, ...validation.error.args);
       }
     }
     
-    const day = await createOrUpdateDay({ ...req.body, id: dayId });
+    const day = await createOrUpdateDay({ ...req.body, id: dayId, date: existingDay.date });
     
     if (day.deleted) {
       return successResponse(res, {

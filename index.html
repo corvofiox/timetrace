@@ -21,11 +21,11 @@
             <form id="login-form" class="auth-form">
                 <div class="form-group">
                     <label for="login-email">邮箱</label>
-                    <input type="email" id="login-email" placeholder="请输入邮箱">
+                    <input type="email" id="login-email" placeholder="请输入邮箱" maxlength="254">
                 </div>
                 <div class="form-group">
                     <label for="login-password">密码</label>
-                    <input type="password" id="login-password" placeholder="请输入密码">
+                    <input type="password" id="login-password" placeholder="请输入密码" maxlength="128">
                 </div>
                 <button type="submit" id="login-btn" class="btn btn-primary btn-full">登录</button>
                 <p class="auth-switch">
@@ -37,15 +37,15 @@
             <form id="register-form" class="auth-form" style="display: none;">
                 <div class="form-group">
                     <label for="register-username">用户名</label>
-                    <input type="text" id="register-username" placeholder="请输入用户名">
+                    <input type="text" id="register-username" placeholder="请输入用户名" maxlength="50">
                 </div>
                 <div class="form-group">
                     <label for="register-email">邮箱</label>
-                    <input type="email" id="register-email" placeholder="请输入邮箱">
+                    <input type="email" id="register-email" placeholder="请输入邮箱" maxlength="254">
                 </div>
                 <div class="form-group">
                     <label for="register-password">密码</label>
-                    <input type="password" id="register-password" placeholder="请输入密码">
+                    <input type="password" id="register-password" placeholder="请输入密码" maxlength="128">
                 </div>
                 <button type="submit" id="register-btn" class="btn btn-primary btn-full">注册</button>
                 <p class="auth-switch">
@@ -163,7 +163,7 @@
             <div class="modal-body">
                 <div class="daily-plan-section">
                     <h4><i class="ri-file-text-line"></i> 今日备注</h4>
-                    <textarea id="daily-summary" placeholder="记录今天的总体计划或备注..."></textarea>
+                    <textarea id="daily-summary" placeholder="记录今天的总体计划或备注..." maxlength="500"></textarea>
                 </div>
                 <div class="tasks-section">
                     <h4><i class="ri-task-line"></i> 待办任务列表</h4>
@@ -190,7 +190,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="goal-name">总体目标</label>
-                    <input type="text" id="goal-name" placeholder="输入总体目标">
+                    <input type="text" id="goal-name" placeholder="输入总体目标" maxlength="100">
                 </div>
                 <div class="form-group">
                     <label for="goal-date">目标日期</label>
@@ -272,11 +272,11 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="task-title">任务标题</label>
-                    <input type="text" id="task-title" class="form-control" placeholder="请输入任务标题">
+                    <input type="text" id="task-title" class="form-control" placeholder="请输入任务标题" maxlength="100">
                 </div>
                 <div class="form-group">
                     <label for="task-input">任务描述</label>
-                    <textarea id="task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）"></textarea>
+                    <textarea id="task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）" maxlength="200"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -296,11 +296,11 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="batch-task-title">任务标题</label>
-                    <input type="text" id="batch-task-title" class="form-control" placeholder="请输入任务标题">
+                    <input type="text" id="batch-task-title" class="form-control" placeholder="请输入任务标题" maxlength="100">
                 </div>
                 <div class="form-group">
                     <label for="batch-task-input">任务描述</label>
-                    <textarea id="batch-task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）"></textarea>
+                    <textarea id="batch-task-input" class="form-control" rows="3" placeholder="请输入任务描述（可选）" maxlength="200"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -384,7 +384,7 @@
                 <div class="search-section">
                         <div class="form-group">
                             <label for="notes-search-input">搜索关键字</label>
-                            <input type="text" id="notes-search-input" class="form-control" placeholder="输入关键字搜索历史备注...">
+                            <input type="text" id="notes-search-input" class="form-control" placeholder="输入关键字搜索历史备注..." maxlength="200">
                         </div>
                     </div>
                 <div class="search-results-section">

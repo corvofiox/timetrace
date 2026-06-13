@@ -2,16 +2,54 @@
 const api = {
     baseURL: window.appConfig ? window.appConfig.getApiBaseUrl() : 'http://localhost:3000/api',
     
+    // 跨标签页刷新协调
+    _refreshChannel: null,
+    _getRefreshChannel() {
+        if (!this._refreshChannel) {
+            this._refreshChannel = new BroadcastChannel('timetrace-token-refresh');
+            this._refreshChannel.onmessage = (event) => {
+                const { token, refreshToken } = event.data;
+                if (token) {
+                    this._safeSetItem('token', token);
+                }
+                if (refreshToken) {
+                    this._safeSetItem('refreshToken', refreshToken);
+                }
+            };
+        }
+        return this._refreshChannel;
+    },
+    _broadcastTokens(token, refreshToken) {
+        try {
+            const channel = this._getRefreshChannel();
+            channel.postMessage({ token, refreshToken });
+        } catch (e) {
+            // BroadcastChannel not supported — fall back to polling
+        }
+    },
+    
+    _safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                console.error('[API] localStorage 配额已满:', key);
+            } else {
+                throw e;
+            }
+        }
+    },
+    
     getToken() {
         return localStorage.getItem('token');
     },
     
     setToken(token) {
-        localStorage.setItem('token', token);
+        this._safeSetItem('token', token);
     },
     
     setRefreshToken(refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
+        this._safeSetItem('refreshToken', refreshToken);
     },
     
     getRefreshToken() {
@@ -98,13 +136,26 @@ const api = {
         }
         
         let response;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
         try {
             response = await fetch(url, {
                 ...options,
-                headers
+                headers,
+                signal: controller.signal
             });
         } catch (networkError) {
             console.error('[API] 网络错误:', networkError);
+            if (networkError.name === 'AbortError') {
+                const error = {
+                    success: false,
+                    errorCode: 'TIMEOUT',
+                    message: '请求超时，请检查网络连接后重试',
+                    details: null
+                };
+                throw error;
+            }
             const error = {
                 success: false,
                 errorCode: 'NETWORK_ERROR',
@@ -112,6 +163,8 @@ const api = {
                 details: { originalError: networkError.message }
             };
             throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
         
         if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
@@ -157,21 +210,16 @@ const api = {
     _refreshPromise: null,
     
     showLoginScreen() {
-        if (typeof elements !== 'undefined' && elements.authContainer && elements.appContainer) {
-            elements.authContainer.style.display = 'flex';
-            elements.appContainer.style.display = 'none';
-        } else {
-            const authContainer = document.getElementById('auth-container');
-            const appContainer = document.getElementById('app-container');
-            if (authContainer && appContainer) {
-                authContainer.style.display = 'flex';
-                appContainer.style.display = 'none';
-            }
+        const authContainer = document.getElementById('auth-container');
+        const appContainer = document.getElementById('app-container');
+        if (authContainer && appContainer) {
+            authContainer.style.display = 'flex';
+            appContainer.style.display = 'none';
         }
     },
     
     async refreshAccessToken() {
-        // 防止并发 401 触发多次刷新
+        // 防止并发 401 触发多次刷新（单标签页内）
         if (this._refreshPromise) {
             return this._refreshPromise;
         }
@@ -180,6 +228,22 @@ const api = {
         if (!refreshToken) {
             throw new Error('没有刷新令牌');
         }
+        
+        // 跨标签页协调：检查是否有其他标签页正在刷新
+        const lockKey = '_tokenRefreshLock';
+        const lockTime = localStorage.getItem(lockKey);
+        if (lockTime) {
+            const elapsed = Date.now() - parseInt(lockTime, 10);
+            if (elapsed < 10000) {
+                // 另一个标签页正在刷新，等待其结果
+                return this._waitForCrossTabRefresh();
+            }
+            // 锁过期，清除
+            localStorage.removeItem(lockKey);
+        }
+        
+        // 获取跨标签页锁
+        this._safeSetItem(lockKey, String(Date.now()));
         
         this._refreshPromise = (async () => {
           try {
@@ -198,16 +262,52 @@ const api = {
             
             const data = await response.json();
             this.setToken(data.token);
+            if (data.refreshToken) {
+                this.setRefreshToken(data.refreshToken);
+            }
+            
+            // 通知其他标签页新令牌
+            this._broadcastTokens(data.token, data.refreshToken);
+            
             return data.token;
           } catch (error) {
             console.error('[API] 刷新令牌失败:', error);
             throw error;
           } finally {
             this._refreshPromise = null;
+            localStorage.removeItem(lockKey);
           }
         })();
 
         return this._refreshPromise;
+    },
+    
+    _waitForCrossTabRefresh() {
+        const startTime = Date.now();
+        const maxWait = 8000; // 最多等待 8 秒
+        const savedToken = this.getToken();
+        
+        return new Promise((resolve, reject) => {
+            const check = setInterval(() => {
+                const newToken = this.getToken();
+                // 如果令牌已刷新（不同于之前的值），则使用新令牌
+                if (newToken && newToken !== savedToken) {
+                    clearInterval(check);
+                    resolve(newToken);
+                    return;
+                }
+                // 超时或锁被清除（刷新失败）
+                const lockTime = localStorage.getItem('_tokenRefreshLock');
+                if (Date.now() - startTime > maxWait || !lockTime) {
+                    clearInterval(check);
+                    if (newToken && newToken !== savedToken) {
+                        resolve(newToken);
+                    } else {
+                        reject(new Error('令牌刷新超时'));
+                    }
+                }
+            }, 200);
+        });
     },
     
     auth: {
