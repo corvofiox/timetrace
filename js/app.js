@@ -517,6 +517,12 @@ const utils = {
         return div.innerHTML;
     },
 
+    // 转义正则表达式特殊字符
+    escapeRegex(str) {
+        if (typeof str !== 'string') return '';
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+
     // 解析日期字符串为 Date 对象（避免时区问题）
     parseDate(dateStr) {
         if (!dateStr || typeof dateStr !== 'string') {
@@ -810,6 +816,7 @@ const calendar = {
     // 更新星期标题
     updateWeekdayHeaders() {
         const weekdayHeaders = document.querySelector('.weekday-headers');
+        if (!weekdayHeaders) return;
         weekdayHeaders.innerHTML = '';
         
         let weekdays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -1094,7 +1101,9 @@ const goals = {
         const countdownResult = utils.calculateCountdown(goal.date);
         
         const safeName = utils.escapeHtml(goal.title);
-        const safeDate = utils.escapeHtml((utils.parseDate(goal.date) || goal.date).toLocaleString('zh-CN'));
+        const parsedDate = utils.parseDate(goal.date);
+        const displayDate = parsedDate ? parsedDate : (goal.date || '');
+        const safeDate = utils.escapeHtml(typeof displayDate === 'string' ? displayDate : displayDate.toLocaleString('zh-CN'));
         const safeCountdown = utils.escapeHtml(countdownResult.text);
 
         goalCard.innerHTML = `
@@ -2716,6 +2725,13 @@ function handleLogout(e) {
     appData.user = null;
     appData.isAuthenticated = false;
     
+    // 清除应用数据
+    appData.goals = [];
+    appData.dailyPlans = {};
+    dataCache.clearCache();
+    reorderQueue.operations = [];
+    reorderQueue.saveQueue();
+    
     // 重置设置为默认值
     appData.settings = {
         theme: 'default',
@@ -2943,13 +2959,17 @@ const batchAddTask = {
     
     // 删除任务
     deleteTask(id) {
-        if (!confirm('确定要删除这个任务吗？')) return;
-        
-        this.tasks = this.tasks.filter(t => t.id !== id);
-        this.renderTasks();
-        this.updatePreview().catch(err => {
-            // 预览更新失败不影响主流程，忽略错误
-        });
+        confirmDialog.open(
+            '删除任务',
+            '确定要删除这个任务吗？',
+            () => {
+                this.tasks = this.tasks.filter(t => t.id !== id);
+                this.renderTasks();
+                this.updatePreview().catch(err => {
+                    // 预览更新失败不影响主流程，忽略错误
+                });
+            }
+        );
     },
     toggleDateMethod(method) {
         // 隐藏所有日期选择容器
@@ -3727,7 +3747,7 @@ const notesSearch = {
             
             notesSearch.displayResults(response.data);
         } catch (error) {
-            elements.searchResultsContainer.innerHTML = `<div class="no-results">搜索失败: ${error.message}</div>`;
+            elements.searchResultsContainer.innerHTML = `<div class="no-results">搜索失败: ${utils.escapeHtml(error.message)}</div>`;
         }
     },
     
@@ -3740,23 +3760,20 @@ const notesSearch = {
         
         let html = '';
         results.forEach(result => {
-            // 格式化日期显示
             const date = utils.parseDate(result.date);
             if (!date) return;
             const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
             
-            // 高亮匹配的关键字
-            let content = result.content;
+            let content = utils.escapeHtml(result.content);
             const keyword = elements.notesSearchInput.value.trim();
             if (keyword) {
-                // 将关键字拆分成单个词，去除空格和空字符串
                 const keywords = keyword.toLowerCase()
-                  .split(/\s+/)  // 按空格拆分
-                  .filter(word => word.length > 0);  // 过滤掉空字符串
+                  .split(/\s+/)
+                  .filter(word => word.length > 0);
                 
-                // 为每个关键字创建高亮
-                keywords.forEach(keyword => {
-                    const regex = new RegExp(`(${keyword})`, 'gi');
+                keywords.forEach(kw => {
+                    const escapedKw = utils.escapeRegex(kw);
+                    const regex = new RegExp(`(${escapedKw})`, 'gi');
                     content = content.replace(regex, '<span class="search-result-highlight">$1</span>');
                 });
             }

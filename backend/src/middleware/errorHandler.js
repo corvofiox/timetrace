@@ -131,5 +131,6 @@ function asyncHandler(fn) {
 
 module.exports = {
   errorHandler,
-  notFoundHandler
+  notFoundHandler,
+  asyncHandler
 };

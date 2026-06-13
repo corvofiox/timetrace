@@ -29,7 +29,7 @@ const {
   deleteRefreshToken
 } = require('../models/database');
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 exports.register = async (req, res) => {
   try {

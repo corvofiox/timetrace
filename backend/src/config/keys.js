@@ -58,6 +58,9 @@ function getRefreshTokenExpireDays() {
     if (unit === 'd') return value;
     if (unit === 'h') return Math.ceil(value / 24);
   }
+  if (process.env.REFRESH_TOKEN_EXPIRE) {
+    console.warn(`[配置警告] REFRESH_TOKEN_EXPIRE 格式无效: "${process.env.REFRESH_TOKEN_EXPIRE}"，应为数字+d/h (如 7d, 168h)，已使用默认值 7 天`);
+  }
   return 7;
 }
 

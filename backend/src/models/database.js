@@ -163,5 +163,6 @@ module.exports = {
   saveRefreshToken,
   findRefreshToken,
   deleteRefreshToken,
+  deleteAllUserRefreshTokens,
   cleanExpiredRefreshTokens
 };

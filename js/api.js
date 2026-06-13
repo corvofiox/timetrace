@@ -154,6 +154,8 @@ const api = {
         return await this.parseJsonResponse(response);
     },
     
+    _refreshPromise: null,
+    
     showLoginScreen() {
         if (typeof elements !== 'undefined' && elements.authContainer && elements.appContainer) {
             elements.authContainer.style.display = 'flex';
@@ -169,32 +171,43 @@ const api = {
     },
     
     async refreshAccessToken() {
+        // 防止并发 401 触发多次刷新
+        if (this._refreshPromise) {
+            return this._refreshPromise;
+        }
+
         const refreshToken = this.getRefreshToken();
         if (!refreshToken) {
             throw new Error('没有刷新令牌');
         }
         
-        try {
+        this._refreshPromise = (async () => {
+          try {
             const response = await fetch(`${this.baseURL}/auth/refresh`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ refreshToken })
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ refreshToken })
             });
             
             if (!response.ok) {
-                const error = await this.parseErrorResponse(response);
-                throw error;
+              const error = await this.parseErrorResponse(response);
+              throw error;
             }
             
             const data = await response.json();
             this.setToken(data.token);
             return data.token;
-        } catch (error) {
+          } catch (error) {
             console.error('[API] 刷新令牌失败:', error);
             throw error;
-        }
+          } finally {
+            this._refreshPromise = null;
+          }
+        })();
+
+        return this._refreshPromise;
     },
     
     auth: {

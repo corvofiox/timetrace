@@ -426,7 +426,9 @@ const days = {
           if (existingDay && existingDay.id) {
             day.id = existingDay.id;
           }
-          allDaysMap.set(key, day);
+          // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段
+          const mergedDay = existingDay ? { ...existingDay, ...day } : day;
+          allDaysMap.set(key, mergedDay);
         }
       });
       
