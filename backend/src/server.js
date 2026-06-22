@@ -36,6 +36,11 @@ app.use(cors({
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
       : ['http://localhost:8000', 'http://localhost:3000'];
 
+    if (allowedOrigins.includes('*')) {
+      // 允许所有来源：动态回显请求 Origin，以兼容 credentials: true
+      return callback(null, origin);
+    }
+
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
