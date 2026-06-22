@@ -3551,7 +3551,6 @@ const batchAddTask = {
                 }
                 
                 if (this.tasks.length > 0) {
-                    dailyPlan.tasks = [];
                     this.tasks.forEach(task => {
                         dailyPlan.tasks.push({
                             id: utils.generateId(),

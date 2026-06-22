@@ -23,6 +23,18 @@ function errorHandler(err, req, res, next) {
 
   console.error('[全局错误处理]', logData);
 
+  // CORS 策略拒绝
+  if (err.message && err.message.includes('CORS policy violation')) {
+    return res.status(403).json({
+      success: false,
+      message: '请求来源不在允许列表中',
+      errorCode: ErrorCodes.CORS_ORIGIN_NOT_ALLOWED,
+      details: {
+        reason: 'origin_not_allowed'
+      }
+    });
+  }
+
   if (err.isOperational) {
     return res.status(err.statusCode || 400).json({
       success: false,

@@ -23,8 +23,8 @@ const initServer = async () => {
 
 const app = express();
 
-// 信任反向代理
-app.set('trust proxy', true);
+// 信任反向代理：仅信任本地与私有网络地址，避免 IP 伪造绕过限流
+app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 
 // Middleware
 // 配置CORS以允许前端跨域请求
@@ -214,6 +214,13 @@ const startServer = async () => {
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  return server;
 };
 
-startServer();
+// 非测试环境自动启动服务器，测试环境由测试文件自行控制
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+module.exports = { app, startServer };

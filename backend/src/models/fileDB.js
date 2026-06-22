@@ -270,8 +270,8 @@ const goals = {
             updatedAt: new Date()
           };
         }
-        // Reset stale order values for goals not in the reorder list
-        return { ...goal, order: undefined };
+        // 保留未参与排序目标的现有顺序
+        return goal;
       });
     });
   }
@@ -370,7 +370,8 @@ const days = {
     // 预先计算是否为空数据，避免重复计算
     const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
     const areTasksEmpty = !dayData.tasks || dayData.tasks.length === 0;
-    const shouldDelete = isSummaryEmpty && areTasksEmpty;
+    const areTimeEntriesEmpty = !dayData.timeEntries || dayData.timeEntries.length === 0;
+    const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
     try {
       return await atomicUpdate(DAYS_FILE, async (allDays) => {
@@ -459,25 +460,29 @@ const days = {
         const key = `${day.date}:${day.userId || ''}`;
         allDaysMap.set(key, day);
       });
-      
+
       days.forEach(day => {
         const key = `${day.date}:${day.userId || ''}`;
         const isSummaryEmpty = !day.summary || day.summary.trim() === '';
         const areTasksEmpty = !day.tasks || day.tasks.length === 0;
-        
-        if (isSummaryEmpty && areTasksEmpty) {
+        const areTimeEntriesEmpty = !day.timeEntries || day.timeEntries.length === 0;
+
+        if (isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty) {
           allDaysMap.delete(key);
         } else {
           const existingDay = allDaysMap.get(key);
+          const now = new Date();
+          let mergedDay;
           if (existingDay && existingDay.id) {
-            day.id = existingDay.id;
+            // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段
+            mergedDay = { ...existingDay, ...day, id: existingDay.id, updatedAt: now };
+          } else {
+            mergedDay = { ...day, createdAt: now };
           }
-          // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段
-          const mergedDay = existingDay ? { ...existingDay, ...day } : day;
           allDaysMap.set(key, mergedDay);
         }
       });
-      
+
       return Array.from(allDaysMap.values());
     });
   }
@@ -543,6 +548,27 @@ const refreshTokens = {
     return deletedToken;
   },
 
+  // 原子化轮换刷新令牌：删除旧令牌并保存新令牌
+  rotate: async (oldToken, newToken, userId) => {
+    let savedToken = null;
+    await atomicUpdate(REFRESH_TOKENS_FILE, (allTokens) => {
+      const oldIndex = allTokens.findIndex(rt => rt.token === oldToken);
+      if (oldIndex !== -1) {
+        allTokens.splice(oldIndex, 1);
+      }
+      // 清除同一用户的其他旧令牌，确保单会话
+      for (let i = allTokens.length - 1; i >= 0; i--) {
+        if (allTokens[i].userId === userId) {
+          allTokens.splice(i, 1);
+        }
+      }
+      savedToken = { token: newToken, userId, createdAt: new Date() };
+      allTokens.push(savedToken);
+      return allTokens;
+    });
+    return savedToken;
+  },
+
   // 删除用户的所有刷新令牌
   deleteAllByUserId: async (userId) => {
     let removedCount = 0;
@@ -603,6 +629,12 @@ const initIdCounters = async () => {
   } catch (error) {
     if (error.code === 'ENOENT') {
       console.log('ID counters file not found, using default values');
+      // 初始化文件，避免后续 generateId 因文件不存在而回退到内存计数
+      try {
+        await fs.writeFile(ID_COUNTERS_FILE, JSON.stringify(idCounters, null, 2), 'utf8');
+      } catch (writeError) {
+        console.error('Failed to create ID counters file:', writeError.message);
+      }
     } else {
       console.error('Failed to read ID counters, using default values:', error.message);
     }

@@ -172,17 +172,24 @@ const api = {
                 const newToken = await this.refreshAccessToken();
                 if (newToken) {
                     headers.Authorization = `Bearer ${newToken}`;
-                    const retryResponse = await fetch(url, {
-                        ...options,
-                        headers
-                    });
-                    
-                    if (!retryResponse.ok) {
-                        const error = await this.parseErrorResponse(retryResponse);
-                        throw error;
+                    const retryController = new AbortController();
+                    const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
+                    try {
+                        const retryResponse = await fetch(url, {
+                            ...options,
+                            headers,
+                            signal: retryController.signal
+                        });
+
+                        if (!retryResponse.ok) {
+                            const error = await this.parseErrorResponse(retryResponse);
+                            throw error;
+                        }
+
+                        return await this.parseJsonResponse(retryResponse);
+                    } finally {
+                        clearTimeout(retryTimeoutId);
                     }
-                    
-                    return await this.parseJsonResponse(retryResponse);
                 }
             } catch (refreshError) {
                 console.error('[API] 刷新令牌失败:', refreshError);

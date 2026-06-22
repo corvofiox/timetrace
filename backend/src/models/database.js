@@ -142,6 +142,12 @@ const deleteRefreshToken = async (token) => {
   return await fileDB.refreshTokens.delete(token);
 };
 
+// 原子化轮换刷新令牌
+const rotateRefreshToken = async (oldToken, newToken, userId) => {
+  await ensureDBInitialized();
+  return await fileDB.refreshTokens.rotate(oldToken, newToken, userId);
+};
+
 // 删除用户的所有刷新令牌
 const deleteAllUserRefreshTokens = async (userId) => {
   await ensureDBInitialized();
@@ -177,6 +183,7 @@ module.exports = {
   saveRefreshToken,
   findRefreshToken,
   deleteRefreshToken,
+  rotateRefreshToken,
   deleteAllUserRefreshTokens,
   cleanExpiredRefreshTokens
 };

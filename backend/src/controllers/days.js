@@ -102,6 +102,86 @@ async function validateTimeEntriesWithGoals(timeEntries, userId) {
   return { error: null };
 }
 
+/**
+ * 校验批量更新中日计划的内容字段结构
+ * @param {Object} day - 日计划对象
+ * @param {number} index - 索引
+ * @returns {{valid: boolean, message?: string, field?: string, errorCode?: string}}
+ */
+function validateBatchDayContent(day, index) {
+  if (day.summary !== undefined && typeof day.summary !== 'string') {
+    return {
+      valid: false,
+      message: `第${index + 1}条日计划的 summary 必须是字符串`,
+      field: `days[${index}].summary`,
+      errorCode: ErrorCodes.VALIDATION_FORMAT
+    };
+  }
+
+  if (day.tasks !== undefined) {
+    if (!Array.isArray(day.tasks)) {
+      return {
+        valid: false,
+        message: `第${index + 1}条日计划的 tasks 必须是数组`,
+        field: `days[${index}].tasks`,
+        errorCode: ErrorCodes.VALIDATION_FORMAT
+      };
+    }
+    for (let j = 0; j < day.tasks.length; j++) {
+      const task = day.tasks[j];
+      if (!task || typeof task !== 'object') {
+        return {
+          valid: false,
+          message: `第${index + 1}条日计划的第${j + 1}个任务必须是对象`,
+          field: `days[${index}].tasks[${j}]`,
+          errorCode: ErrorCodes.VALIDATION_FORMAT
+        };
+      }
+      if (task.title !== undefined && typeof task.title !== 'string') {
+        return {
+          valid: false,
+          message: `第${index + 1}条日计划的第${j + 1}个任务标题必须是字符串`,
+          field: `days[${index}].tasks[${j}].title`,
+          errorCode: ErrorCodes.VALIDATION_FORMAT
+        };
+      }
+    }
+  }
+
+  if (day.timeEntries !== undefined) {
+    if (!Array.isArray(day.timeEntries)) {
+      return {
+        valid: false,
+        message: `第${index + 1}条日计划的 timeEntries 必须是数组`,
+        field: `days[${index}].timeEntries`,
+        errorCode: ErrorCodes.VALIDATION_FORMAT
+      };
+    }
+    for (let j = 0; j < day.timeEntries.length; j++) {
+      const entry = day.timeEntries[j];
+      if (!entry || typeof entry !== 'object') {
+        return {
+          valid: false,
+          message: `第${index + 1}条日计划的第${j + 1}个时间条目必须是对象`,
+          field: `days[${index}].timeEntries[${j}]`,
+          errorCode: ErrorCodes.VALIDATION_FORMAT
+        };
+      }
+      const entryErrors = validateTimeEntry(entry, j);
+      if (entryErrors.length > 0) {
+        return {
+          valid: false,
+          message: `第${index + 1}条日计划：${entryErrors[0].message}`,
+          field: `days[${index}].${entryErrors[0].field}`,
+          errorCode: ErrorCodes.DAY_TIME_INVALID
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
 exports.getDays = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -173,7 +253,7 @@ exports.getDay = async (req, res) => {
         dayId: req.params.id,
         dayOwnerId: day.userId
       });
-      return unauthorizedResponse(res, '您没有权限访问此日计划', ErrorCodes.DAY_NOT_FOUND, {
+      return unauthorizedResponse(res, '您没有权限访问此日计划', ErrorCodes.DAY_NO_PERMISSION, {
         reason: 'not_owner'
       });
     }
@@ -301,7 +381,7 @@ exports.updateDay = async (req, res) => {
         dayId: dayId,
         dayOwnerId: existingDay.userId
       });
-      return unauthorizedResponse(res, '您没有权限修改此日计划', ErrorCodes.DAY_NOT_FOUND, {
+      return unauthorizedResponse(res, '您没有权限修改此日计划', ErrorCodes.DAY_NO_PERMISSION, {
         reason: 'not_owner'
       });
     }
@@ -366,7 +446,7 @@ exports.deleteDay = async (req, res) => {
         dayId: dayId,
         dayOwnerId: existingDay.userId
       });
-      return unauthorizedResponse(res, '您没有权限删除此日计划', ErrorCodes.DAY_NOT_FOUND, {
+      return unauthorizedResponse(res, '您没有权限删除此日计划', ErrorCodes.DAY_NO_PERMISSION, {
         reason: 'not_owner'
       });
     }
@@ -487,6 +567,14 @@ exports.batchUpdateDays = async (req, res) => {
         return validationErrorResponse(res, `第${i + 1}条日计划日期格式无效`, ErrorCodes.DAY_DATE_INVALID, {
           field: `days[${i}].date`,
           value: day.date,
+          index: i
+        });
+      }
+
+      const contentValidation = validateBatchDayContent(day, i);
+      if (!contentValidation.valid) {
+        return validationErrorResponse(res, contentValidation.message, contentValidation.errorCode, {
+          field: contentValidation.field,
           index: i
         });
       }

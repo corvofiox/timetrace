@@ -26,11 +26,13 @@ const {
   createUser,
   saveRefreshToken,
   findRefreshToken,
-  deleteRefreshToken
+  deleteRefreshToken,
+  rotateRefreshToken
 } = require('../models/database');
 const fileDB = require('../models/fileDB');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MAX_PASSWORD_LENGTH = 128;
 
 exports.register = async (req, res) => {
   try {
@@ -89,6 +91,15 @@ exports.register = async (req, res) => {
       });
     }
 
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      return validationErrorResponse(res, `密码长度不能超过${MAX_PASSWORD_LENGTH}个字符`, ErrorCodes.VALIDATION_LENGTH, {
+        field: 'password',
+        reason: 'max_length',
+        maxLength: MAX_PASSWORD_LENGTH,
+        actualLength: password.length
+      });
+    }
+
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return conflictResponse(res, '该邮箱已被注册', ErrorCodes.REG_EMAIL_EXISTS, {
@@ -99,8 +110,9 @@ exports.register = async (req, res) => {
 
     // Check for duplicate username
     const allUsers = await fileDB.users.getAll();
-    const existingUsername = allUsers.find(u => u.username === username.trim());
-    if (existingUsername) {
+    const normalizedUsername = username.trim().toLowerCase();
+    const usernameExists = allUsers.find(u => u.username.toLowerCase() === normalizedUsername);
+    if (usernameExists) {
       return conflictResponse(res, '该用户名已被使用', ErrorCodes.REG_USERNAME_EXISTS, {
         field: 'username',
         reason: 'already_exists'
@@ -279,14 +291,12 @@ exports.refreshToken = async (req, res) => {
       process.env.JWT_EXPIRE || '15m'
     );
 
-    // Rotate refresh token: delete old, create new
-    await deleteRefreshToken(refreshToken);
-
+    // 原子化轮换刷新令牌：删除旧令牌并保存新令牌
     const newRefreshToken = createRefreshToken(
       { id: user.id },
       process.env.REFRESH_TOKEN_EXPIRE || '7d'
     );
-    await saveRefreshToken(newRefreshToken, user.id);
+    await rotateRefreshToken(refreshToken, newRefreshToken, user.id);
 
     successResponse(res, { token: newToken, refreshToken: newRefreshToken });
   } catch (error) {
@@ -316,6 +326,13 @@ exports.logout = async (req, res) => {
     const { refreshToken } = req.body;
     
     if (refreshToken) {
+      // 校验 refreshToken 是否属于当前用户
+      const tokenData = await findRefreshToken(refreshToken);
+      if (tokenData && tokenData.userId !== req.user.id) {
+        return unauthorizedResponse(res, '无权操作该刷新令牌', ErrorCodes.AUTH_UNAUTHORIZED, {
+          reason: 'token_not_owned'
+        });
+      }
       await deleteRefreshToken(refreshToken);
     }
 
