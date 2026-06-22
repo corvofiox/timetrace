@@ -45,6 +45,11 @@ app.use(cors({
       return callback(null, true);
     }
 
+    console.warn('[CORS拒绝]', {
+      origin,
+      allowedOrigins,
+      envAllowedOrigins: process.env.ALLOWED_ORIGINS
+    });
     return callback(new Error('CORS policy violation: origin not allowed'));
   },
   credentials: true,
