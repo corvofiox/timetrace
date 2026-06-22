@@ -7,6 +7,7 @@ const os = require('os');
 const testDataDir = path.join(os.tmpdir(), 'timetrace-test-' + Date.now());
 fs.mkdirSync(testDataDir, { recursive: true });
 process.env.DATA_DIR = testDataDir;
+process.env.DB_TYPE = 'json';
 process.env.JWT_SECRET = 'test-jwt-secret-must-be-at-least-32-characters-long';
 process.env.REFRESH_TOKEN_SECRET = 'test-refresh-secret-must-be-at-least-32-characters-long';
 process.env.NODE_ENV = 'test';

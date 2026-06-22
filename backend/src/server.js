@@ -1,9 +1,8 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const fileDB = require('./models/fileDB');
 const { initConfig, getRefreshTokenExpireDays } = require('./config/keys');
-const { cleanExpiredRefreshTokens } = require('./models/database');
+const { init: initDatabase, cleanup: cleanupDatabase, cleanExpiredRefreshTokens } = require('./models/database');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const rateLimit = require('express-rate-limit');
 
@@ -13,8 +12,8 @@ const initServer = async () => {
     // 初始化配置（加载环境变量和验证密钥）
     initConfig();
     
-    // 初始化数据库
-    await fileDB.init();
+    // 初始化数据库（自动迁移 JSON 到 SQLite）
+    await initDatabase();
   } catch (error) {
     console.error('服务器初始化失败:', error.message);
     process.exit(1);
@@ -209,7 +208,7 @@ const startServer = async () => {
     server.close(async () => {
       console.log('HTTP server closed');
       try {
-        await fileDB.cleanup();
+        await cleanupDatabase();
       } catch (err) {
         console.error('Cleanup failed:', err);
       }

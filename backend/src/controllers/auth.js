@@ -23,13 +23,13 @@ function createRefreshToken(payload, expiresIn) {
 const { 
   findUserByEmail, 
   findUserById, 
+  getAllUsers,
   createUser,
   saveRefreshToken,
   findRefreshToken,
   deleteRefreshToken,
   rotateRefreshToken
 } = require('../models/database');
-const fileDB = require('../models/fileDB');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_PASSWORD_LENGTH = 128;
@@ -109,7 +109,7 @@ exports.register = async (req, res) => {
     }
 
     // Check for duplicate username
-    const allUsers = await fileDB.users.getAll();
+    const allUsers = await getAllUsers();
     const normalizedUsername = username.trim().toLowerCase();
     const usernameExists = allUsers.find(u => u.username.toLowerCase() === normalizedUsername);
     if (usernameExists) {

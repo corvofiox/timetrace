@@ -1,6 +1,9 @@
 # 多阶段构建 - 构建阶段
 FROM node:18-alpine AS builder
 
+# 安装构建原生模块所需的依赖
+RUN apk add --no-cache python3 make g++
+
 # 设置工作目录
 WORKDIR /app
 
