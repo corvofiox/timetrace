@@ -1,6 +1,6 @@
 // API服务模块
 const api = {
-    baseURL: window.appConfig ? window.appConfig.getApiBaseUrl() : 'http://localhost:3000/api',
+    baseURL: window.appConfig ? window.appConfig.getApiBaseUrl() : 'http://localhost:8192/api',
     
     // 跨标签页刷新协调
     _refreshChannel: null,

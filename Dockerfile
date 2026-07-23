@@ -48,11 +48,12 @@ RUN mkdir -p /app/data
 
 # 设置环境变量
 ENV NODE_ENV=production
-ENV PORT=8000
+ENV PORT=8192
+
 ENV DATA_DIR=/app/data
 
 # 暴露端口（单端口模式）
-EXPOSE 8000
+EXPOSE 8192
 
 # 启动应用
 CMD ["sh", "/app/start.sh"]

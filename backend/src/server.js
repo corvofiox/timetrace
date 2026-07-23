@@ -33,7 +33,7 @@ app.use(cors({
 
     const allowedOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-      : ['http://localhost:8000', 'http://localhost:3000'];
+      : ['http://localhost:8192'];
 
     if (allowedOrigins.includes('*')) {
       // 允许所有来源：动态回显请求 Origin，以兼容 credentials: true
@@ -164,7 +164,7 @@ if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ENDPOINTS 
   });
 }
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8192;
 
 // 启动服务器
 const startServer = async () => {

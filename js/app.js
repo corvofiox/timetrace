@@ -733,6 +733,9 @@ elements.confirmOkBtn.addEventListener('click', () => confirmDialog.confirm());
 // 取消按钮事件
 elements.confirmCancelBtn.addEventListener('click', () => confirmDialog.close());
 const calendar = {
+    // 星期标题缓存，避免每次 render 都重建 DOM
+    _lastWeekdayConfig: null,
+
     // 渲染日历
     render() {
         const { currentMonth, currentYear } = appData;
@@ -773,13 +776,16 @@ const calendar = {
             }
         });
 
+        // 使用 DocumentFragment 批量插入，减少 DOM 重排
+        const fragment = document.createDocumentFragment();
+
         // 添加空白格子，直到当月第一天
         for (let i = 0; i < emptyDays; i++) {
             const emptyDay = document.createElement('div');
             emptyDay.classList.add('calendar-day', 'empty-day');
-            elements.calendarDays.appendChild(emptyDay);
+            fragment.appendChild(emptyDay);
         }
-        
+
         // 添加当月日期
         for (let day = 1; day <= daysInMonth; day++) {
             // 验证日期是否有效（特别处理31日的情况）
@@ -787,14 +793,16 @@ const calendar = {
                 console.warn(`Invalid date detected: ${currentYear}-${currentMonth + 1}-${day}, skipping`);
                 continue;
             }
-            
+
             const date = new Date(currentYear, currentMonth, day);
             const dayElement = calendar.createDayElement(day, date, goalsByDate);
             if (dayElement) {
-                elements.calendarDays.appendChild(dayElement);
+                fragment.appendChild(dayElement);
             }
         }
-        
+
+        elements.calendarDays.appendChild(fragment);
+
         // 更新统计
         stats.update();
     },
@@ -833,15 +841,20 @@ const calendar = {
     updateWeekdayHeaders() {
         const weekdayHeaders = document.querySelector('.weekday-headers');
         if (!weekdayHeaders) return;
+
+        const configKey = `${appData.settings.startWeekMonday}-${appData.settings.showWeekends}`;
+        if (this._lastWeekdayConfig === configKey) return;
+        this._lastWeekdayConfig = configKey;
+
         weekdayHeaders.innerHTML = '';
-        
+
         let weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-        
+
         // 如果设置为周一作为一周的开始，则调整星期顺序
         if (appData.settings.startWeekMonday) {
             weekdays = ['一', '二', '三', '四', '五', '六', '日'];
         }
-        
+
         // 如果设置为不显示周末，则只显示工作日
         if (!appData.settings.showWeekends) {
             if (appData.settings.startWeekMonday) {
@@ -850,13 +863,15 @@ const calendar = {
                 weekdays = ['一', '二', '三', '四', '五'];
             }
         }
-        
+
+        const fragment = document.createDocumentFragment();
         weekdays.forEach(day => {
             const dayHeader = document.createElement('div');
             dayHeader.classList.add('weekday-header');
             dayHeader.textContent = day;
-            weekdayHeaders.appendChild(dayHeader);
+            fragment.appendChild(dayHeader);
         });
+        weekdayHeaders.appendChild(fragment);
     },
     
     // 创建日期元素
@@ -1964,6 +1979,9 @@ const userSettings = {
             console.error('保存设置到 localStorage 失败:', e);
         }
         
+        // 设置变更后清除星期标题缓存，确保重新生成
+        calendar._lastWeekdayConfig = null;
+
         // 重新渲染日历以应用设置
         calendar.render();
         
@@ -2240,10 +2258,9 @@ function showApp() {
                     
                     // 队列处理完成后，重新加载数据以确保最新状态
                     loadData().then(() => {
-                        // 渲染界面
-                        calendar.render();
+                        // 渲染界面（forceRender 内部已包含 calendar.render）
                         goals.forceRender();
-                        
+
                         // 启动倒计时更新
                         if (appData.goals.length > 0) {
                             countdown.startTimer();
@@ -2255,10 +2272,9 @@ function showApp() {
             // 添加监听器
             reorderQueue.addListener(queueListener);
         } else {
-            // 没有队列操作，直接渲染界面
-            calendar.render();
+            // 没有队列操作，直接渲染界面（forceRender 内部已包含 calendar.render）
             goals.forceRender();
-            
+
             // 启动倒计时更新
             if (appData.goals.length > 0) {
                 countdown.startTimer();

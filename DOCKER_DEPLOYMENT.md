@@ -31,18 +31,17 @@ docker build -t timetrace:latest .
 ### 4. 运行Docker容器
 ```bash
 # 基本运行
-docker run -d -p 3000:3000 -p 8000:8000 --name timetrace timetrace:latest
+docker run -d -p 8192:8192 --name timetrace timetrace:latest
 
 # 持久化数据存储（推荐）
-docker run -d -p 3000:3000 -p 8000:8000 -v ./backend/src/data:/app/data --name timetrace timetrace:latest
+docker run -d -p 8192:8192 -v ./backend/src/data:/app/data --name timetrace timetrace:latest
 
 # 使用Docker Compose（推荐）
 docker-compose up -d
 ```
 
 ### 4. 访问应用程序
-- 前端界面: http://localhost:8000
-- 后端API: http://localhost:3000
+- 打开浏览器访问: http://localhost:8192
 
 ## Docker配置说明
 
@@ -54,12 +53,11 @@ docker-compose up -d
 ### 启动脚本
 - 容器使用 `start.sh` 作为启动入口
 - `start.sh` 自动调用 `setup.js` 进行环境检查，然后调用 `start-services.js` 启动服务
-- `start-services.js` 负责启动前端和后端服务
+- `start-services.js` 负责启动服务（单端口模式，同时提供 API 和静态文件）
 - 支持健康检查和优雅关闭
 
 ### 端口映射
-- 3000: 后端API服务
-- 8000: 前端静态文件服务
+- 8192: 单端口模式，同时提供 API 和静态文件服务
 
 ### 数据持久化
 应用程序数据存储在 `/app/data` 目录中，包括：
@@ -73,7 +71,7 @@ docker-compose up -d
 
 ## 环境变量
 以下环境变量可在运行时覆盖:
-- `PORT`: 后端服务端口 (默认: 3000)
+- `PORT`: 服务端口 (默认: 8192)
 - `DATA_DIR`: 数据存储目录 (默认: /app/data)
 - `NODE_ENV`: 运行环境 (默认: production)
 
@@ -105,7 +103,7 @@ docker rm timetrace
 
 ### 3. 启动新容器
 ```bash
-docker run -d -p 3000:3000 -p 8000:8000 -v /path/to/data:/app/data --name timetrace timetrace:latest
+docker run -d -p 8192:8192 -v /path/to/data:/app/data --name timetrace timetrace:latest
 ```
 
 ## 生产环境部署建议
@@ -125,13 +123,12 @@ services:
   timetrace:
     build: .
     ports:
-      - "3000:3000"
-      - "8000:8000"
+      - "8192:8192"
     volumes:
       - ./backend/src/data:/app/data  # 挂载数据目录(包含.env文件)
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=8192
       - DATA_DIR=/app/data
     restart: unless-stopped
 ```

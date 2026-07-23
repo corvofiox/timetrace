@@ -7,7 +7,7 @@
  * 1. 检查并创建.env文件（如果不存在）
  * 2. 生成安全的JWT密钥
  * 3. 创建必要的数据目录
- * 4. 启动前端和后端服务
+ * 4. 启动服务（单端口模式，同时提供 API 和静态文件）
  * 
  * 使用方法：
  * node setup.js [选项]
@@ -22,7 +22,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const { isDockerEnvironment, getDataDir, getProjectRoot, getEnvPath } = require('./backend/src/utils/env');
+const { isDockerEnvironment, getDataDir, getProjectRoot, getEnvPath, loadEnvFile } = require('./backend/src/utils/env');
 
 // 颜色输出函数
 const colors = {
@@ -54,7 +54,7 @@ const envTemplate = `# 环境变量配置文件
 # 此文件由setup.js自动生成，包含敏感信息，请勿提交到版本控制系统
 
 # 服务器端口
-PORT=8000
+PORT=8192
 
 # JWT密钥配置（自动生成）
 JWT_SECRET=
@@ -184,90 +184,90 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-// 启动服务
+// 启动服务（单端口模式，后端同时提供 API 和静态文件）
 async function startServices() {
+  // 先加载.env以获取用户配置的端口
+  loadEnvFile(envPath);
+
   colorLog('\n🚀 启动 Timetrace 服务...', 'cyan');
-  
+
   // 启动后端服务
-  colorLog('📡 启动后端服务...', 'yellow');
-  
+  colorLog('📡 启动服务...', 'yellow');
+
   // 设置环境变量
-  const env = { 
+  const env = {
     ...process.env,
     DATA_DIR: dataDir,
     ENV_PATH: envPath
   };
-  
+
   const backendProcess = spawn('node', ['src/server.js'], {
     cwd: path.join(projectRoot, 'backend'),
     stdio: 'pipe',
     detached: true,
     env: env
   });
-  
+
   backendProcess.stdout.on('data', (data) => {
     const output = data.toString().trim();
     if (output.includes('Server running on port')) {
-      colorLog('✅ 后端服务已启动', 'green');
+      colorLog('✅ 服务已启动', 'green');
     }
   });
-  
+
   backendProcess.stderr.on('data', (data) => {
-    colorLog(`后端错误: ${data.toString().trim()}`, 'red');
+    colorLog(`服务错误: ${data.toString().trim()}`, 'red');
   });
-  
+
   // 等待后端启动
   await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  // 启动前端服务
-  colorLog('🌐 启动前端服务...', 'yellow');
-  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-  const frontendProcess = spawn(pythonCommand, ['-m', 'http.server', '8000'], {
-    cwd: projectRoot,
-    stdio: 'pipe',
-    detached: true
-  });
-  
-  frontendProcess.stdout.on('data', (data) => {
-    const output = data.toString().trim();
-    if (output.includes('Serving HTTP on')) {
-      colorLog('✅ 前端服务已启动', 'green');
-    }
-  });
-  
-  frontendProcess.stderr.on('data', (data) => {
-    colorLog(`前端错误: ${data.toString().trim()}`, 'red');
-  });
-  
-  // 等待前端启动
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
+
   // 显示访问信息
+  const displayPort = process.env.PORT || '8192';
   colorLog('\n🎉 服务启动完成！', 'green');
-  colorLog('📱 前端地址: http://localhost:8000', 'blue');
-  colorLog('🔧 后端地址: http://localhost:3000', 'blue');
-  colorLog('\n按 Ctrl+C 停止所有服务', 'yellow');
-  
+  colorLog(`📱 访问地址: http://localhost:${displayPort}`, 'blue');
+  colorLog('\n按 Ctrl+C 停止服务', 'yellow');
+
   // 处理退出信号
   process.on('SIGINT', () => {
     colorLog('\n🛑 正在停止服务...', 'yellow');
-    
-    // 终止子进程
+
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', backendProcess.pid, '/f', '/t']);
-      spawn('taskkill', ['/pid', frontendProcess.pid, '/f', '/t']);
+      // Windows: 使用 taskkill 终止整个进程树并等待完成
+      const killer = spawn('taskkill', ['/pid', backendProcess.pid, '/f', '/t']);
+      killer.on('close', () => {
+        colorLog('✅ 服务已停止', 'green');
+        process.exit(0);
+      });
+      killer.on('error', () => {
+        colorLog('✅ 服务已停止', 'green');
+        process.exit(0);
+      });
     } else {
-      process.kill(-backendProcess.pid);
-      process.kill(-frontendProcess.pid);
+      // Unix/Linux/macOS: 终止进程组并等待子进程退出
+      const exitHandler = () => {
+        colorLog('✅ 服务已停止', 'green');
+        process.exit(0);
+      };
+
+      // 如果子进程已经退出，直接清理退出，避免 once('exit') 无法触发导致挂起
+      if (backendProcess.exitCode !== null || backendProcess.signalCode !== null) {
+        exitHandler();
+        return;
+      }
+
+      backendProcess.once('exit', exitHandler);
+
+      try {
+        process.kill(-backendProcess.pid);
+      } catch (error) {
+        // 进程可能已退出，忽略错误
+      }
     }
-    
-    colorLog('✅ 服务已停止', 'green');
-    process.exit(0);
   });
-  
+
   // 保持进程运行
   backendProcess.unref();
-  frontendProcess.unref();
 }
 
 // 主函数

@@ -82,31 +82,20 @@
    ```
 
 3. **访问应用**
-   
-   打开浏览器访问：`http://localhost:8000`
+
+   打开浏览器访问：`http://localhost:8192`
 
 #### 方式二：手动启动
 
-1. **启动后端服务**
+1. **启动后端服务**（单端口模式，同时提供 API 和静态文件）
    ```bash
    cd backend
    npm start
    ```
 
-2. **启动前端服务**
-   
-   在项目根目录下：
-   ```bash
-   # 使用Python内置HTTP服务器
-   python -m http.server 8000
-   
-   # 或使用Node.js的http-server（需要先安装）
-   npx http-server -p 8000
-   ```
+2. **访问应用**
 
-3. **访问应用**
-   
-   打开浏览器访问：`http://localhost:8000`
+   打开浏览器访问：`http://localhost:8192`
 
 ### 方式三：使用Docker部署
 
@@ -138,12 +127,11 @@
    docker build -t timetrace:latest .
    
    # 运行容器
-   docker run -d --name timetrace -p 3000:3000 -p 8000:8000 -v ./backend/src/data:/app/data timetrace:latest
+   docker run -d --name timetrace -p 8192:8192 -v ./backend/src/data:/app/data timetrace:latest
    ```
 
 4. **访问应用**
-   - 前端：`http://localhost:8000`
-   - 后端API：`http://localhost:3000`
+   - 打开浏览器访问：`http://localhost:8192`
 
 5. **停止服务**
    ```bash

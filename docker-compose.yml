@@ -5,12 +5,12 @@ services:
     build: .
     container_name: timetrace
     ports:
-      - "8000:8000"
+      - "8192:8192"
     volumes:
       - ./backend/src/data:/app/data
     environment:
       - NODE_ENV=production
-      - PORT=8000
+      - PORT=8192
       - DATA_DIR=/app/data
       - DB_TYPE=sqlite
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}

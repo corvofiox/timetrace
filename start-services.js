@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
-const { getProjectRoot, getDataDir, getEnvPath } = require('./backend/src/utils/env');
+const { getProjectRoot, getDataDir, getEnvPath, loadEnvFile } = require('./backend/src/utils/env');
 
 // 颜色输出函数
 const colors = {
@@ -119,15 +119,18 @@ async function startServices() {
     colorLog('❌ 错误: .env文件不存在，请先运行 setup.js --init-only', 'red');
     process.exit(1);
   }
-  
+
+  // 加载.env文件中的基础配置（如PORT），确保启动器与server.js读取一致
+  loadEnvFile(envPath);
+
   // 创建数据目录
   const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
-  
+
   // 获取端口配置
-  const PORT = process.env.PORT || 8000;
+  const PORT = process.env.PORT || 8192;
   
   // 启动服务（单端口模式，后端同时服务 API 和静态文件）
   colorLog('📡 启动服务...', 'yellow');
