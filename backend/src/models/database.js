@@ -189,6 +189,7 @@ const cleanup = async () => {
 };
 
 module.exports = {
+  init: ensureDBInitialized,
   DB_TYPE,
   findUserByEmail,
   findUserById,
