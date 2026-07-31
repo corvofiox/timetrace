@@ -279,6 +279,17 @@ exports.refreshToken = async (req, res) => {
 
     const decoded = jwt.verify(refreshToken, getRefreshTokenSecret());
 
+    // 校验令牌归属与数据库中记录一致，防止跨用户使用
+    if (tokenData.userId !== decoded.id) {
+      console.warn('[刷新令牌失败] 令牌与用户不匹配', {
+        tokenUserId: tokenData.userId,
+        decodedUserId: decoded.id
+      });
+      return unauthorizedResponse(res, '无效的刷新令牌', ErrorCodes.AUTH_TOKEN_INVALID, {
+        reason: 'refresh_token_invalid'
+      });
+    }
+
     const user = await findUserById(decoded.id);
     if (!user) {
       return unauthorizedResponse(res, '用户不存在', ErrorCodes.AUTH_USER_NOT_FOUND, {

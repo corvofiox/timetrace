@@ -18,6 +18,11 @@ if (typeof window !== 'undefined' && !window.ErrorHandler) {
                 alert(message);
             }
             return { code: 'UNKNOWN', message: error && error.message, handled: true };
+        },
+        handleAndAlert: function(error, context, fallbackMessage) {
+            const message = (error && error.message) || fallbackMessage || '操作失败，请稍后重试';
+            console.error(`[${context}] 错误:`, error);
+            alert(message);
         }
     };
 }
@@ -147,8 +152,19 @@ const reorderQueue = {
             } catch (error) {
                 this.notifyListeners('operationFailed', { operation, error });
                 
-                // 如果是网络错误，将操作重新加入队列末尾进行重试
-                if (error.message && error.message.includes('network')) {
+                // 网络/超时错误可重试：api.js 抛出的网络错误带 errorCode=NETWORK_ERROR/TIMEOUT，
+                // 兼容旧格式的 message 关键词判定
+                const isRetryable = error && (
+                    error.errorCode === 'NETWORK_ERROR' ||
+                    error.errorCode === 'TIMEOUT' ||
+                    (error.message && (
+                        error.message.includes('network') ||
+                        error.message.includes('Network') ||
+                        error.message.includes('Failed to fetch')
+                    ))
+                );
+                
+                if (isRetryable) {
                     operation._retries = (operation._retries || 0) + 1;
                     if (operation._retries <= this.maxRetries) {
                         this.operations.push(operation);
@@ -474,13 +490,53 @@ const dataCache = {
         this.monthDataCache.clear();
     }
 };
+// 日计划保存队列：按日期隔离并串行执行。
+// - 每个日期最多保留一个排队操作，新操作替换旧操作，连点不会产生重复请求
+// - 入队时捕获日期与摘要快照，执行时从最新 appData + pending 重建任务数据，
+//   保证排队期间的新变更不会丢失，也不会错写其他日期
+// - 保存成功后不清空 pending（重建模型天然累积所有变更且幂等），
+//   pending 仅在模态框关闭（放弃编辑）时清理
+const queuedDaySaves = new Map();
+let daySaveQueueRunning = false;
+// 当前正在执行保存的日期（从队列取出后仍在处理中，供 close() 判断）
+let daySaveCurrentDate = null;
+
+function queueDaySave(dateStr, summarySnapshot, operationBuilder) {
+    queuedDaySaves.set(dateStr, { summarySnapshot, operationBuilder });
+    drainDaySaveQueue();
+}
+
+async function drainDaySaveQueue() {
+    if (daySaveQueueRunning) return;
+    daySaveQueueRunning = true;
+    try {
+        while (queuedDaySaves.size > 0) {
+            const operations = Array.from(queuedDaySaves.entries());
+            queuedDaySaves.clear();
+            for (const [dateStr, item] of operations) {
+                daySaveCurrentDate = dateStr;
+                try {
+                    await item.operationBuilder(dateStr, item.summarySnapshot);
+                } catch (error) {
+                    console.error('[日计划保存] 队列操作失败:', error);
+                } finally {
+                    daySaveCurrentDate = null;
+                }
+            }
+        }
+    } finally {
+        daySaveQueueRunning = false;
+    }
+}
+
 // 将待处理的变更应用到任务列表
 function applyPendingChanges(tasks, dateStr) {
     const pending = appData.pendingTaskChanges;
+    tasks = tasks || [];
     
-    // 1. 过滤已删除
+    // 1. 过滤已删除（按日期隔离，避免跨日期误删）
     tasks = tasks.filter(task => {
-        return !pending.deleted.some(deleted => deleted.taskId === task.id);
+        return !pending.deleted.some(deleted => deleted.taskId === task.id && deleted.dateStr === dateStr);
     });
     
     // 2. 应用编辑
@@ -497,14 +553,14 @@ function applyPendingChanges(tasks, dateStr) {
         }
     });
     
-    // 3. 添加新任务
+    // 3. 添加新任务（幂等去重：任务已在列表中（已保存过）则不重复添加）
     pending.added.forEach(addition => {
-        if (addition.dateStr === dateStr) {
+        if (addition.dateStr === dateStr && !tasks.some(t => t.id === addition.id)) {
             const correspondingEdit = pending.edited.find(edit => edit.taskId === addition.id);
             tasks.push({
                 id: addition.id,
-                title: addition.title,
-                description: addition.description,
+                title: correspondingEdit && correspondingEdit.title !== undefined ? correspondingEdit.title : addition.title,
+                description: correspondingEdit && correspondingEdit.description !== undefined ? correspondingEdit.description : addition.description,
                 completed: correspondingEdit ? correspondingEdit.completed : addition.completed
             });
         }
@@ -669,25 +725,43 @@ const utils = {
         return Math.round((completed / tasks.length) * 100);
     },
     
-    // 计算连续天数
-    calculateStreak() {
+    // 计算连续天数（跨月份时自动加载缺失数据，避免统计被清零）
+    async calculateStreak() {
         let streak = 0;
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0);
         
         let checkDate = new Date(yesterday);
+        // 已尝试加载过的月份，避免重复请求
+        const loadedMonths = new Set();
         
         for (let i = 0; i < 365; i++) {
             const dateStr = utils.formatDate(checkDate);
+            const monthKey = `${checkDate.getFullYear()}-${checkDate.getMonth()}`;
             
-            if (appData.dailyPlans[dateStr] && appData.dailyPlans[dateStr].tasks) {
-                const tasks = appData.dailyPlans[dateStr].tasks;
-                if (tasks.length > 0 && tasks.every(task => task.completed)) {
-                    streak++;
-                } else {
+            let dayData = appData.dailyPlans[dateStr];
+            
+            // 日期缺失且所在月份尚未缓存/加载：先拉取该月数据再判断
+            if (!dayData && !dataCache.isMonthCached(checkDate.getFullYear(), checkDate.getMonth()) && !loadedMonths.has(monthKey)) {
+                loadedMonths.add(monthKey);
+                try {
+                    const range = utils.getSafeDateRange(checkDate.getFullYear(), checkDate.getMonth());
+                    const response = await api.getDays(range.startDate, range.endDate);
+                    const days = response.data || [];
+                    days.forEach(day => {
+                        appData.dailyPlans[day.date] = day;
+                    });
+                    dataCache.cacheMonthData(checkDate.getFullYear(), checkDate.getMonth(), days);
+                    dayData = appData.dailyPlans[dateStr];
+                } catch (error) {
+                    // 加载失败，保守停止统计
                     break;
                 }
+            }
+            
+            if (dayData && dayData.tasks && dayData.tasks.length > 0 && dayData.tasks.every(task => task.completed)) {
+                streak++;
             } else {
                 break;
             }
@@ -1369,8 +1443,11 @@ const dayModal = {
         if (!date) return;
         elements.modalDateTitle.textContent = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
         
-        // 加载该日的计划和任务
+        // 加载该日的计划和任务（兼容 tasks/timeEntries 缺失或非数组的旧数据）
         const dailyPlan = appData.dailyPlans[dateStr] || { summary: '', tasks: [] };
+        if (!Array.isArray(dailyPlan.tasks)) {
+            dailyPlan.tasks = [];
+        }
         elements.dailySummary.value = dailyPlan.summary || '';
         
         // 渲染任务列表（包括待处理的更改）
@@ -1384,10 +1461,16 @@ const dayModal = {
     close() {
         elements.dayModal.classList.remove('active');
         
-        // 清空待处理的更改
-        appData.pendingTaskChanges.added = [];
-        appData.pendingTaskChanges.edited = [];
-        appData.pendingTaskChanges.deleted = [];
+        // pending 为全局共享：只要仍有任何日期的排队/执行中的保存，
+        // 就不能清空，否则该日期排队操作执行时会读到空 pending，
+        // 导致其新增/勾选的变更（服务端也未保存）静默丢失。
+        // 代价：A 日排队时关闭 B 日模态框，B 的未保存编辑也会保留，
+        // 这是全局 pending 模型的设计限制，比丢数据安全。
+        if (queuedDaySaves.size === 0 && daySaveCurrentDate === null) {
+            appData.pendingTaskChanges.added = [];
+            appData.pendingTaskChanges.edited = [];
+            appData.pendingTaskChanges.deleted = [];
+        }
     },
     
     // 渲染任务列表
@@ -1440,59 +1523,55 @@ const dayModal = {
     
     // 保存日计划
     save() {
-        if (this._saving) return;
-        this._saving = true;
-        
         const dateStr = utils.formatDate(appData.selectedDate);
         const summary = elements.dailySummary.value;
         
-        // 获取当前任务列表
-        const dailyPlan = appData.dailyPlans[dateStr] || { date: dateStr, summary: '', tasks: [] };
-        dailyPlan.date = dateStr;
-        dailyPlan.summary = summary;
-        
-        dailyPlan.tasks = applyPendingChanges(dailyPlan.tasks, dateStr);
-        
-        // 使用API保存
-        api.createOrUpdateDay(dailyPlan)
-            .then(response => {
-                this._saving = false;
-                const savedDay = response.data;
+        // 入队时捕获日期与摘要；执行时从最新 appData + pending 重建任务数据，
+        // 避免排队期间切换日期错写、或新变更丢失
+        queueDaySave(dateStr, summary, async (saveDateStr, summarySnapshot) => {
+            try {
+                const existing = appData.dailyPlans[saveDateStr];
+                const dailyPlan = existing ? { ...existing } : { date: saveDateStr, summary: '', tasks: [] };
+                dailyPlan.date = saveDateStr;
+                dailyPlan.summary = summarySnapshot;
+                dailyPlan.tasks = applyPendingChanges(dailyPlan.tasks || [], saveDateStr);
+                
+                // 使用API保存
+                const response = await api.createOrUpdateDay(dailyPlan);
                 
                 // 检查是否删除了条目
-                if (response.message && response.message.includes('已删除')) {
+                if (response && response.message && response.message.includes('已删除')) {
                     // 从应用数据中删除该日期的条目
-                    delete appData.dailyPlans[dateStr];
-                    // 清空表单
-                    elements.dailySummary.value = '';
-                    elements.tasksList.innerHTML = '';
-                } else {
+                    delete appData.dailyPlans[saveDateStr];
+                    // 仅当当前仍显示该日期时才清空表单，避免清掉其他日期的展示内容
+                    if (utils.formatDate(appData.selectedDate) === saveDateStr) {
+                        elements.dailySummary.value = '';
+                        elements.tasksList.innerHTML = '';
+                    }
+                } else if (response && response.data) {
                     // 更新应用数据
-                    appData.dailyPlans[dateStr] = savedDay;
+                    appData.dailyPlans[saveDateStr] = response.data;
                 }
                 
-                // 清空待处理的更改
-                appData.pendingTaskChanges.added = [];
-                appData.pendingTaskChanges.edited = [];
-                appData.pendingTaskChanges.deleted = [];
-                
                 // 清除相关月份的缓存，因为数据已更新
-                const date = utils.parseDate(dateStr);
-                dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
-                
-                // 保存操作完成
-                // 保存日计划数据
+                const date = utils.parseDate(saveDateStr);
+                if (date) {
+                    dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                }
                 
                 // 更新界面
                 calendar.render();
                 stats.update();
                 
-                dayModal.close();
-            })
-            .catch(error => {
-                this._saving = false;
+                // 仅当保存的仍是当前展示日期时关闭模态框，
+                // 避免排队期间用户已切换日期导致其编辑被意外关闭
+                if (utils.formatDate(appData.selectedDate) === saveDateStr) {
+                    dayModal.close();
+                }
+            } catch (error) {
                 ErrorHandler.handleAndAlert(error, '保存日计划', '保存失败');
-            });
+            }
+        });
     }
 };
 
@@ -1657,8 +1736,13 @@ const taskInputModal = {
             );
             
             if (existingIndex !== -1) {
-                // 更新现有的待处理编辑
-                appData.pendingTaskChanges.edited[existingIndex] = editChange;
+                // 保留已有的 completed 等字段，只更新标题/描述，避免覆盖复选框切换的状态
+                const existingChange = appData.pendingTaskChanges.edited[existingIndex];
+                appData.pendingTaskChanges.edited[existingIndex] = {
+                    ...existingChange,
+                    title: title,
+                    description: description
+                };
             } else {
                 // 添加新的待处理编辑
                 appData.pendingTaskChanges.edited.push(editChange);
@@ -1687,7 +1771,7 @@ const taskInputModal = {
     updateUIWithPendingChanges() {
         const dateStr = utils.formatDate(appData.selectedDate);
         const dailyPlan = appData.dailyPlans[dateStr] || { date: dateStr, summary: '', tasks: [] };
-        const tasks = applyPendingChanges([...dailyPlan.tasks], dateStr);
+        const tasks = applyPendingChanges([...(dailyPlan.tasks || [])], dateStr);
         
         // 更新界面
         dayModal.renderTasks(tasks);
@@ -1717,10 +1801,17 @@ const chart = {
     },
     
     // 渲染折线图
-    render() {
+    async render() {
         // 获取选中的参数
         const chartType = elements.chartType.value;
         const period = elements.chartPeriod.value;
+        
+        // 年/季视图可能跨越未加载的月份：先拉取缺失数据，避免图表大量显示 0
+        try {
+            await chart.ensureRangeLoaded(period);
+        } catch (error) {
+            console.error('加载图表范围数据失败:', error);
+        }
         
         // 准备数据
         const { labels, datasets } = chart.prepareData(period);
@@ -1820,6 +1911,49 @@ const chart = {
         }];
         
         return { labels, datasets };
+    },
+    
+    // 确保视图范围内的所有月份数据已加载（缺失的月份逐个拉取并缓存）
+    async ensureRangeLoaded(period) {
+        const now = new Date();
+        let startDate, endDate;
+        
+        switch (period) {
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                break;
+            case 'quarter':
+                const quarter = Math.floor(now.getMonth() / 3);
+                startDate = new Date(now.getFullYear(), quarter * 3, 1);
+                endDate = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                endDate = new Date(now.getFullYear(), 11, 31);
+                break;
+            default:
+                return;
+        }
+        
+        const missingMonths = [];
+        const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        while (cursor <= endDate) {
+            if (!dataCache.isMonthCached(cursor.getFullYear(), cursor.getMonth())) {
+                missingMonths.push({ year: cursor.getFullYear(), month: cursor.getMonth() });
+            }
+            cursor.setMonth(cursor.getMonth() + 1);
+        }
+        
+        await Promise.all(missingMonths.map(async ({ year, month }) => {
+            const range = utils.getSafeDateRange(year, month);
+            const response = await api.getDays(range.startDate, range.endDate);
+            const days = response.data || [];
+            days.forEach(day => {
+                appData.dailyPlans[day.date] = day;
+            });
+            dataCache.cacheMonthData(year, month, days);
+        }));
     },
     
     // 计算所有任务的整体完成情况
@@ -2082,9 +2216,12 @@ const stats = {
         const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
         elements.completionRate.textContent = `${completionRate}%`;
         
-        // 更新连续天数
-        const streak = utils.calculateStreak();
-        elements.currentStreak.textContent = streak;
+        // 更新连续天数（异步：跨月时自动加载缺失数据后再统计）
+        utils.calculateStreak().then(streak => {
+            elements.currentStreak.textContent = streak;
+        }).catch(error => {
+            console.error('计算连续天数失败:', error);
+        });
     }
 };
 
@@ -2164,6 +2301,8 @@ const countdown = {
         }
         if (this._boundHandleVisibility) {
             document.removeEventListener('visibilitychange', this._boundHandleVisibility);
+            // 置空引用，使后续 startTimer 能重新绑定监听
+            this._boundHandleVisibility = null;
         }
     }
 };
@@ -2418,9 +2557,9 @@ function bindEvents() {
             const dateStr = utils.formatDate(appData.selectedDate);
             const taskItem = checkbox.closest('.task-item');
 
-            // 查找任务数据
+            // 查找任务数据（兼容 tasks 缺失的旧数据）
             const dailyPlan = appData.dailyPlans[dateStr] || { tasks: [] };
-            let task = dailyPlan.tasks.find(t => t.id === taskId);
+            let task = (dailyPlan.tasks || []).find(t => t.id === taskId);
 
             // 检查待处理编辑
             let currentCompleted = task ? task.completed : false;
@@ -2463,44 +2602,41 @@ function bindEvents() {
                 taskItem.classList.remove('completed');
             }
 
-            // 立即保存到后端
-            const existingDailyPlan = appData.dailyPlans[dateStr];
-            const dailyPlanToSave = existingDailyPlan ? { ...existingDailyPlan } : { date: dateStr, summary: '', tasks: [] };
-            dailyPlanToSave.date = dateStr;
-            dailyPlanToSave.summary = elements.dailySummary.value;
+            // 入队时捕获日期与摘要，执行时从最新 appData + pending 重建任务数据：
+            // 排队期间切换日期不会错写其他日期，新勾选/编辑的变更也不会丢失
+            queueDaySave(dateStr, elements.dailySummary.value, async (saveDateStr, summarySnapshot) => {
+                try {
+                    const existingDailyPlan = appData.dailyPlans[saveDateStr];
+                    const dailyPlanToSave = existingDailyPlan ? { ...existingDailyPlan } : { date: saveDateStr, summary: '', tasks: [] };
+                    dailyPlanToSave.date = saveDateStr;
+                    dailyPlanToSave.summary = summarySnapshot;
 
-            if (existingDailyPlan && existingDailyPlan.id) {
-                dailyPlanToSave.id = existingDailyPlan.id;
-            }
+                    if (existingDailyPlan && existingDailyPlan.id) {
+                        dailyPlanToSave.id = existingDailyPlan.id;
+                    }
 
-            dailyPlanToSave.tasks = [...(dailyPlanToSave.tasks || [])];
+                    dailyPlanToSave.tasks = [...(dailyPlanToSave.tasks || [])];
+                    dailyPlanToSave.tasks = applyPendingChanges(dailyPlanToSave.tasks, saveDateStr);
 
-            dailyPlanToSave.tasks = applyPendingChanges(dailyPlanToSave.tasks, dateStr);
+                    const response = await api.createOrUpdateDay(dailyPlanToSave);
 
-            try {
-                const response = await api.createOrUpdateDay(dailyPlanToSave);
-                const savedDay = response.data;
+                    if (response && response.message && response.message.includes('已删除')) {
+                        delete appData.dailyPlans[saveDateStr];
+                    } else if (response && response.data) {
+                        appData.dailyPlans[saveDateStr] = response.data;
+                    }
 
-                if (response.message && response.message.includes('已删除')) {
-                    delete appData.dailyPlans[dateStr];
-                } else {
-                    appData.dailyPlans[dateStr] = savedDay;
+                    const date = utils.parseDate(saveDateStr);
+                    if (date) {
+                        dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
+                    }
+
+                    calendar.render();
+                    stats.update();
+                } catch (error) {
+                    ErrorHandler.handleAndAlert(error, '保存日计划', '保存失败');
                 }
-
-                appData.pendingTaskChanges.added = [];
-                appData.pendingTaskChanges.edited = [];
-                appData.pendingTaskChanges.deleted = [];
-
-                const date = utils.parseDate(dateStr);
-                if (date) {
-                    dataCache.clearMonthCache(date.getFullYear(), date.getMonth());
-                }
-
-                calendar.render();
-                stats.update();
-            } catch (error) {
-                ErrorHandler.handleAndAlert(error, '保存日计划', '保存失败');
-            }
+            });
 
             return;
         }
@@ -2510,13 +2646,18 @@ function bindEvents() {
             const dateStr = utils.formatDate(appData.selectedDate);
             const dailyPlan = appData.dailyPlans[dateStr] || { tasks: [] };
 
-            // 查找任务（包括待处理更改）
-            let task = dailyPlan.tasks.find(t => t.id === taskId);
+            // 查找任务（包括待处理更改和尚未保存的新增任务）
+            let task = (dailyPlan.tasks || []).find(t => t.id === taskId);
             const pendingEdit = appData.pendingTaskChanges.edited.find(
                 change => change.taskId === taskId && change.dateStr === dateStr
             );
             if (pendingEdit) {
                 task = { ...task, ...pendingEdit };
+            }
+            if (!task) {
+                task = appData.pendingTaskChanges.added.find(
+                    addition => addition.id === taskId && addition.dateStr === dateStr
+                );
             }
 
             if (task) {
@@ -2543,7 +2684,7 @@ function bindEvents() {
                 };
 
                 const existingIndex = appData.pendingTaskChanges.deleted.findIndex(
-                    change => change.taskId === taskId
+                    change => change.taskId === taskId && change.dateStr === dateStr
                 );
 
                 if (existingIndex === -1) {
@@ -2785,12 +2926,21 @@ function handleLogout(e) {
     appData.user = null;
     appData.isAuthenticated = false;
     
+    // 停止倒计时定时器，避免登出后继续更新界面
+    countdown.stopTimer();
+    
     // 清除应用数据
     appData.goals = [];
     appData.dailyPlans = {};
     dataCache.clearAllCache();
     reorderQueue.operations = [];
     reorderQueue.saveQueue();
+    
+    // 清空待处理变更与保存队列，防止旧会话数据串到下次登录
+    appData.pendingTaskChanges.added = [];
+    appData.pendingTaskChanges.edited = [];
+    appData.pendingTaskChanges.deleted = [];
+    queuedDaySaves.clear();
     
     // 重置设置为默认值
     appData.settings = {
@@ -3598,6 +3748,19 @@ const batchAddTask = {
                 appData.dailyPlans[day.date] = day;
             });
             
+            // 清除涉及月份的缓存，避免切走再切回时旧缓存覆盖批量操作结果
+            const affectedMonthKeys = new Set();
+            sortedDates.forEach(dateStr => {
+                const date = utils.parseDate(dateStr);
+                if (date) {
+                    affectedMonthKeys.add(`${date.getFullYear()}-${date.getMonth()}`);
+                }
+            });
+            affectedMonthKeys.forEach(key => {
+                const parts = key.split('-');
+                dataCache.clearMonthCache(parseInt(parts[0], 10), parseInt(parts[1], 10));
+            });
+            
             if (clearExisting) {
                 sortedDates.forEach(date => {
                     if (!appData.dailyPlans[date]) {
@@ -3665,10 +3828,11 @@ const monthPicker = {
             batchAddTask.renderMiniCalendar();
         } else {
             // 更新主日历
-            appData.currentYear = this.selectedYear;
-            appData.currentMonth = this.selectedMonth;
-            calendar.render();
-            loadDays();
+            // selectMonth/goToCurrentMonth 已调用 updateCalendar()（含渲染+加载），
+            // 此处仅在年月实际发生变化时（如取消时调整过年份）才重新加载，避免重复请求
+            if (appData.currentYear !== this.selectedYear || appData.currentMonth !== this.selectedMonth) {
+                this.updateCalendar();
+            }
         }
     },
     
@@ -3773,11 +3937,13 @@ const monthPicker = {
         // 保存当前月份状态
         appData.saveCurrentMonth();
         
-        // 重新渲染日历
-        calendar.render();
-        
-        // 重新加载日计划数据
-        loadDays();
+        // 先加载日计划数据，再渲染日历，避免新月份显示空白
+        loadDays().then(() => {
+            calendar.render();
+        }).catch(error => {
+            console.error('加载日计划失败:', error);
+            calendar.render();
+        });
     }
 };
 

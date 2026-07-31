@@ -129,10 +129,27 @@ const getStaticRoot = () => {
   return path.join(__dirname, '../../');
 };
 
-// 静态文件路由
-app.use(express.static(getStaticRoot(), {
-  index: false
-}));
+// 仅公开前端静态资源（index.html / js / styles / libs）
+// 严禁将整个项目根目录暴露为静态目录，否则 backend/ 源码与数据文件
+// （users.json、refreshTokens.json、timetrace.db 等）可被未授权下载
+const PUBLIC_STATIC_PREFIXES = ['/js/', '/styles/', '/libs/', '/index.html'];
+app.use((req, res, next) => {
+  // 先对路径解码并归一化，防止 /js/../backend/... 、%2e%2e、%2f、%5c（反斜杠）等变体
+  // 绕过白名单前缀检查（白名单必须基于归一化后的路径判定）
+  let normalized;
+  try {
+    // 反斜杠统一转为正斜杠，避免 posix.normalize 无法识别 Windows 路径分隔符
+    const decoded = decodeURIComponent(req.path).replace(/\\/g, '/');
+    normalized = path.posix.normalize(decoded);
+  } catch (e) {
+    // 畸形编码直接拒绝，交给 SPA 回退处理
+    return next();
+  }
+  if (normalized === '/' || PUBLIC_STATIC_PREFIXES.some(prefix => normalized.startsWith(prefix))) {
+    return express.static(getStaticRoot(), { index: false })(req, res, next);
+  }
+  return next();
+});
 
 // SPA 回退路由 - 所有非 API 请求返回 index.html
 app.get('*', (req, res, next) => {

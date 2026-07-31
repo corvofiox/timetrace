@@ -369,17 +369,24 @@ const days = {
   createOrUpdate: async (dayData) => {
     // 预先计算是否为空数据，避免重复计算
     const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
-    const areTasksEmpty = !dayData.tasks || dayData.tasks.length === 0;
-    const areTimeEntriesEmpty = !dayData.timeEntries || dayData.timeEntries.length === 0;
+    const areTasksEmpty = !Array.isArray(dayData.tasks) || dayData.tasks.length === 0;
+    const areTimeEntriesEmpty = !Array.isArray(dayData.timeEntries) || dayData.timeEntries.length === 0;
     const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
+
+    // 非数组的 tasks/timeEntries 一律按空数组处理，防止脏数据入库
+    const normalizedData = {
+      ...dayData,
+      tasks: Array.isArray(dayData.tasks) ? dayData.tasks : [],
+      timeEntries: Array.isArray(dayData.timeEntries) ? dayData.timeEntries : []
+    };
 
     try {
       return await atomicUpdate(DAYS_FILE, async (allDays) => {
-        let existingDay = allDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+        let existingDay = allDays.find(day => day.date === normalizedData.date && day.userId === normalizedData.userId);
         
         // 如果日期+用户ID查找未匹配，尝试通过ID查找（更新场景的兜底）
-        if (!existingDay && dayData.id) {
-          existingDay = allDays.find(day => day.id.toString() === dayData.id.toString());
+        if (!existingDay && normalizedData.id) {
+          existingDay = allDays.find(day => day.id.toString() === normalizedData.id.toString());
         }
 
         if (shouldDelete) {
@@ -401,7 +408,7 @@ const days = {
           if (index !== -1) {
             allDays[index] = {
               ...allDays[index],
-              ...dayData,
+              ...normalizedData,
               id: existingDay.id || allDays[index].id,
               createdAt: allDays[index].createdAt,
               updatedAt: new Date()
@@ -412,7 +419,7 @@ const days = {
 
         // 创建新日计划
         const newDay = {
-          ...dayData,
+          ...normalizedData,
           id: await generateId('days'),
           createdAt: new Date()
         };
@@ -425,15 +432,15 @@ const days = {
         }
 
         // 查找操作后的结果（更新或新建）
-        const resultDay = updatedDays.find(day => day.date === dayData.date && day.userId === dayData.userId);
+        const resultDay = updatedDays.find(day => day.date === normalizedData.date && day.userId === normalizedData.userId);
         return resultDay || { deleted: false, message: 'No data to save' };
       });
     } catch (error) {
       console.error('[原子更新失败]', {
         error: error.message,
-        date: dayData.date,
-        userId: dayData.userId,
-        operation: shouldDelete ? 'delete' : (dayData.id ? 'update' : 'create')
+        date: normalizedData.date,
+        userId: normalizedData.userId,
+        operation: shouldDelete ? 'delete' : (normalizedData.id ? 'update' : 'create')
       });
       throw error;
     }
@@ -454,18 +461,23 @@ const days = {
   },
 
   batchUpdate: async (days) => {
-    return await atomicUpdate(DAYS_FILE, (allDays) => {
+    // 记录本次操作涉及的日期键（date:userId），响应只返回这些记录，
+    // 避免将整个数据文件（含其他用户数据）泄露给客户端
+    const affectedKeys = [];
+
+    const updatedAllDays = await atomicUpdate(DAYS_FILE, async (allDays) => {
       const allDaysMap = new Map();
       allDays.forEach(day => {
         const key = `${day.date}:${day.userId || ''}`;
         allDaysMap.set(key, day);
       });
 
-      days.forEach(day => {
+      for (const day of days) {
         const key = `${day.date}:${day.userId || ''}`;
+        affectedKeys.push(key);
         const isSummaryEmpty = !day.summary || day.summary.trim() === '';
-        const areTasksEmpty = !day.tasks || day.tasks.length === 0;
-        const areTimeEntriesEmpty = !day.timeEntries || day.timeEntries.length === 0;
+        const areTasksEmpty = !Array.isArray(day.tasks) || day.tasks.length === 0;
+        const areTimeEntriesEmpty = !Array.isArray(day.timeEntries) || day.timeEntries.length === 0;
 
         if (isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty) {
           allDaysMap.delete(key);
@@ -475,16 +487,32 @@ const days = {
           let mergedDay;
           if (existingDay && existingDay.id) {
             // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段
-            mergedDay = { ...existingDay, ...day, id: existingDay.id, updatedAt: now };
+            mergedDay = {
+              ...existingDay,
+              ...day,
+              tasks: Array.isArray(day.tasks) ? day.tasks : [],
+              timeEntries: Array.isArray(day.timeEntries) ? day.timeEntries : [],
+              id: existingDay.id,
+              updatedAt: now
+            };
           } else {
-            mergedDay = { ...day, createdAt: now };
+            mergedDay = {
+              ...day,
+              tasks: Array.isArray(day.tasks) ? day.tasks : [],
+              timeEntries: Array.isArray(day.timeEntries) ? day.timeEntries : [],
+              id: await generateId('days'),
+              createdAt: now
+            };
           }
           allDaysMap.set(key, mergedDay);
         }
-      });
+      }
 
       return Array.from(allDaysMap.values());
     });
+
+    // 只返回本次操作涉及且仍存在的记录
+    return updatedAllDays.filter(day => affectedKeys.includes(`${day.date}:${day.userId || ''}`));
   }
 };
 

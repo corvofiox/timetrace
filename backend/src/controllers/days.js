@@ -186,7 +186,14 @@ exports.getDays = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    if (startDate && endDate) {
+    if (startDate || endDate) {
+      if (!startDate || !endDate) {
+        return validationErrorResponse(res, '请同时提供开始日期和结束日期', ErrorCodes.VALIDATION_REQUIRED, {
+          field: !startDate ? 'startDate' : 'endDate',
+          reason: 'required'
+        });
+      }
+      
       if (!dateUtils.isValidDateString(startDate)) {
         return validationErrorResponse(res, '开始日期无效，请输入有效的日期', ErrorCodes.DAY_DATE_INVALID, {
           field: 'startDate',
@@ -218,7 +225,10 @@ exports.getDays = async (req, res) => {
         data: days
       });
     } else {
-      const days = await getDaysByUserId(req.user.id);
+      // 无日期参数时仅返回最近一年数据，避免全量响应过大
+      const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+      const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const days = await getDaysByDateRange(fmtDate(oneYearAgo), fmtDate(new Date()), req.user.id);
       
       successResponse(res, {
         count: days.length,
@@ -321,6 +331,31 @@ exports.createOrUpdateDay = async (req, res) => {
       });
     }
 
+    // null 视为未提供（model 层会归一化为空数组/空字符串），仅拒绝真正的错误类型
+    if (timeEntries !== undefined && timeEntries !== null && !Array.isArray(timeEntries)) {
+      return validationErrorResponse(res, 'timeEntries 必须是数组格式', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'timeEntries',
+        reason: 'must_be_array',
+        actualType: typeof timeEntries
+      });
+    }
+
+    if (tasks !== undefined && tasks !== null && !Array.isArray(tasks)) {
+      return validationErrorResponse(res, 'tasks 必须是数组格式', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'tasks',
+        reason: 'must_be_array',
+        actualType: typeof tasks
+      });
+    }
+
+    if (summary !== undefined && summary !== null && typeof summary !== 'string') {
+      return validationErrorResponse(res, 'summary 必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'summary',
+        reason: 'must_be_string',
+        actualType: typeof summary
+      });
+    }
+
     if (timeEntries && Array.isArray(timeEntries)) {
       const validation = await validateTimeEntriesWithGoals(timeEntries, req.user.id);
       if (validation.error) {
@@ -386,7 +421,32 @@ exports.updateDay = async (req, res) => {
       });
     }
 
-    const { timeEntries } = req.body;
+    const { timeEntries, tasks, summary } = req.body;
+    
+    // null 视为未提供（model 层会归一化为空数组/空字符串），仅拒绝真正的错误类型
+    if (timeEntries !== undefined && timeEntries !== null && !Array.isArray(timeEntries)) {
+      return validationErrorResponse(res, 'timeEntries 必须是数组格式', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'timeEntries',
+        reason: 'must_be_array',
+        actualType: typeof timeEntries
+      });
+    }
+    
+    if (tasks !== undefined && tasks !== null && !Array.isArray(tasks)) {
+      return validationErrorResponse(res, 'tasks 必须是数组格式', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'tasks',
+        reason: 'must_be_array',
+        actualType: typeof tasks
+      });
+    }
+    
+    if (summary !== undefined && summary !== null && typeof summary !== 'string') {
+      return validationErrorResponse(res, 'summary 必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'summary',
+        reason: 'must_be_string',
+        actualType: typeof summary
+      });
+    }
     
     if (timeEntries && Array.isArray(timeEntries)) {
       const validation = await validateTimeEntriesWithGoals(timeEntries, req.user.id);
@@ -395,12 +455,14 @@ exports.updateDay = async (req, res) => {
       }
     }
     
+    // 部分更新：未提供（undefined/null）的字段保留原值，避免误清空 tasks/timeEntries。
+    // 注意 null 不能传给 model 层，否则会被归一化为 [] 而清空已有数据
     const day = await createOrUpdateDay({
       id: dayId,
       date: existingDay.date,
-      timeEntries: req.body.timeEntries,
-      tasks: req.body.tasks,
-      summary: req.body.summary,
+      timeEntries: timeEntries !== undefined && timeEntries !== null ? timeEntries : existingDay.timeEntries,
+      tasks: tasks !== undefined && tasks !== null ? tasks : existingDay.tasks,
+      summary: summary !== undefined && summary !== null ? summary : existingDay.summary,
       userId: req.user.id
     });
     

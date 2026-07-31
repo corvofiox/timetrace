@@ -1,4 +1,5 @@
 // 基于 SQLite 的数据库实现
+const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { getDataDir } = require('../config/keys');
@@ -16,6 +17,9 @@ const deserializeDate = (value) => value ? new Date(value) : value;
 // 初始化数据库连接和表结构
 const init = () => {
   if (db) return;
+
+  // 确保数据目录存在（与 fileDB 的 ensureDataDir 行为一致）
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 
   db = new Database(DB_FILE);
   db.pragma('journal_mode = WAL');
@@ -308,8 +312,8 @@ const days = {
 
   createOrUpdate: (dayData) => {
     const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
-    const areTasksEmpty = !dayData.tasks || dayData.tasks.length === 0;
-    const areTimeEntriesEmpty = !dayData.timeEntries || dayData.timeEntries.length === 0;
+    const areTasksEmpty = !Array.isArray(dayData.tasks) || dayData.tasks.length === 0;
+    const areTimeEntriesEmpty = !Array.isArray(dayData.timeEntries) || dayData.timeEntries.length === 0;
     const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
     const existing = days.findByDate(dayData.date, dayData.userId);
@@ -322,8 +326,8 @@ const days = {
     }
 
     const now = serializeDate(new Date());
-    const tasksJson = JSON.stringify(dayData.tasks || []);
-    const timeEntriesJson = JSON.stringify(dayData.timeEntries || []);
+    const tasksJson = JSON.stringify(Array.isArray(dayData.tasks) ? dayData.tasks : []);
+    const timeEntriesJson = JSON.stringify(Array.isArray(dayData.timeEntries) ? dayData.timeEntries : []);
 
     if (existing) {
       db.prepare(
@@ -372,16 +376,16 @@ const days = {
     const batchTransaction = db.transaction(() => {
       daysList.forEach(day => {
         const isSummaryEmpty = !day.summary || day.summary.trim() === '';
-        const areTasksEmpty = !day.tasks || day.tasks.length === 0;
-        const areTimeEntriesEmpty = !day.timeEntries || day.timeEntries.length === 0;
+        const areTasksEmpty = !Array.isArray(day.tasks) || day.tasks.length === 0;
+        const areTimeEntriesEmpty = !Array.isArray(day.timeEntries) || day.timeEntries.length === 0;
         const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
         if (shouldDelete) {
           deleteStmt.run(day.userId, day.date);
         } else {
           const existing = db.prepare('SELECT id FROM days WHERE userId = ? AND date = ?').get(day.userId, day.date);
-          const tasksJson = JSON.stringify(day.tasks || []);
-          const timeEntriesJson = JSON.stringify(day.timeEntries || []);
+          const tasksJson = JSON.stringify(Array.isArray(day.tasks) ? day.tasks : []);
+          const timeEntriesJson = JSON.stringify(Array.isArray(day.timeEntries) ? day.timeEntries : []);
           if (existing) {
             updateStmt.run(day.summary || '', tasksJson, timeEntriesJson, now, day.userId, day.date);
           } else {
@@ -392,7 +396,10 @@ const days = {
     });
 
     batchTransaction();
-    return daysList;
+    // 返回实际保存的记录（含自动生成的 id），已删除的日期不返回
+    return daysList
+      .map(day => days.findByDate(day.date, day.userId))
+      .filter(day => day !== null);
   }
 };
 
