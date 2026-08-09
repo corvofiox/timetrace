@@ -23,6 +23,9 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const { isDockerEnvironment, getDataDir, getProjectRoot, getEnvPath, loadEnvFile } = require('./backend/src/utils/env');
+// 复用 keys.js 的弱密钥判定（WEAK_SECRET_VALUES 占位值 + 最短长度），
+// 保证 keys.js 拒绝启动的弱密钥能被 setup.js 重新生成（否则用户按提示操作也无法恢复）
+const { isWeakSecret } = require('./backend/src/config/keys');
 
 // 颜色输出函数
 const colors = {
@@ -102,29 +105,34 @@ async function initEnvironment() {
     colorLog('✅ .env文件已存在', 'green');
   }
   
-  // 生成密钥 - 仅在必要时生成新密钥
-  if (!noKeys && (!envExists || !hasValidKeys())) {
-    colorLog('🔑 生成安全密钥...', 'yellow');
+  // 生成密钥 - 仅重新生成缺失或过弱的密钥（避免只丢一个密钥时把另一个也轮换掉、导致所有已登录会话失效）
+  const missingKeys = getMissingKeys();
+  if (!noKeys && missingKeys.length > 0) {
+    colorLog(`🔑 生成安全密钥 (需重新生成: ${missingKeys.join(', ')})...`, 'yellow');
     
     let envContent = fs.readFileSync(envPath, 'utf8');
     
-    // 替换空密钥
-    envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generateSecureKey()}`);
-    envContent = envContent.replace(/REFRESH_TOKEN_SECRET=.*/, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
+    // 只替换缺失的密钥；正则锚定行首（排除注释行）
+    if (missingKeys.includes('JWT_SECRET')) {
+      envContent = envContent.replace(/^JWT_SECRET=.*$/m, `JWT_SECRET=${generateSecureKey()}`);
+    }
+    if (missingKeys.includes('REFRESH_TOKEN_SECRET')) {
+      envContent = envContent.replace(/^REFRESH_TOKEN_SECRET=.*$/m, `REFRESH_TOKEN_SECRET=${generateSecureKey()}`);
+    }
     
     // 确保DATA_DIR设置正确
-    envContent = envContent.replace(/DATA_DIR=.*/, `DATA_DIR=${dataDir}`);
+    envContent = envContent.replace(/^DATA_DIR=.*$/m, `DATA_DIR=${dataDir}`);
     
     fs.writeFileSync(envPath, envContent);
-    colorLog('✅ 安全密钥已生成并保存', 'green');
+    colorLog('✅ 缺失/过弱的安全密钥已生成并保存', 'green');
   } else if (envExists) {
     // 即使不生成新密钥，也确保DATA_DIR设置正确
     let envContent = fs.readFileSync(envPath, 'utf8');
-    const dataDirMatch = envContent.match(/DATA_DIR=(.+)/);
+    const dataDirMatch = envContent.match(/^DATA_DIR=(.+)$/m);
     
-    if (!dataDirMatch || dataDirMatch[1] !== dataDir) {
+    if (!dataDirMatch || dataDirMatch[1].trim() !== dataDir) {
       colorLog('📝 更新数据目录路径...', 'yellow');
-      envContent = envContent.replace(/DATA_DIR=.*/, `DATA_DIR=${dataDir}`);
+      envContent = envContent.replace(/^DATA_DIR=.*$/m, `DATA_DIR=${dataDir}`);
       fs.writeFileSync(envPath, envContent);
       colorLog('✅ 数据目录路径已更新', 'green');
     }
@@ -153,13 +161,28 @@ async function initEnvironment() {
   colorLog('\n🎉 环境初始化完成！', 'green');
 }
 
-// 检查是否有有效的密钥
-function hasValidKeys() {
+// 去除 .env 值两侧引号，与 keys.js loadEnvVariables 的解析保持一致
+function stripEnvQuotes(value) {
+  const v = value.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+// 检查 .env 中缺失或过弱的密钥，返回需要重新生成的密钥名列表。
+// 复用 keys.js 导出的 isWeakSecret（WEAK_SECRET_VALUES 公开占位值 + 最短长度阈值），
+// 与 keys.js 启动强校验完全一致：只补缺失不修弱值时，keys.js 拒绝启动并提示
+// "请运行 node setup.js"，但用户照做也无法恢复——这里补齐该死角。
+function getMissingKeys() {
   const envContent = fs.readFileSync(envPath, 'utf8');
-  const jwtMatch = envContent.match(/JWT_SECRET=(.+)/);
-  const refreshMatch = envContent.match(/REFRESH_TOKEN_SECRET=(.+)/);
-  
-  return jwtMatch && jwtMatch[1] && refreshMatch && refreshMatch[1];
+  const missing = [];
+  // 正则锚定行首（^...$/m），不会误匹配 "# JWT_SECRET=xxx" 这类注释行
+  const jwtMatch = envContent.match(/^JWT_SECRET=(.+)$/m);
+  if (!jwtMatch || isWeakSecret(stripEnvQuotes(jwtMatch[1]))) missing.push('JWT_SECRET');
+  const refreshMatch = envContent.match(/^REFRESH_TOKEN_SECRET=(.+)$/m);
+  if (!refreshMatch || isWeakSecret(stripEnvQuotes(refreshMatch[1]))) missing.push('REFRESH_TOKEN_SECRET');
+  return missing;
 }
 
 // 运行命令

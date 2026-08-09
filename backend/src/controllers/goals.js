@@ -85,6 +85,14 @@ exports.createGoal = async (req, res) => {
   try {
     const { title, color, description, date } = req.body;
 
+    if (title !== undefined && typeof title !== 'string') {
+      return validationErrorResponse(res, '目标标题必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'title',
+        reason: 'invalid_type',
+        actualType: typeof title
+      });
+    }
+
     if (!title || title.trim() === '') {
       return validationErrorResponse(res, '目标标题不能为空', ErrorCodes.GOAL_TITLE_EMPTY, {
         field: 'title',
@@ -101,6 +109,30 @@ exports.createGoal = async (req, res) => {
       });
     }
 
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return validationErrorResponse(res, '目标描述必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'description',
+        reason: 'invalid_type',
+        actualType: typeof description
+      });
+    }
+
+    if (date !== undefined && date !== null && typeof date !== 'string') {
+      return validationErrorResponse(res, '目标日期必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'date',
+        reason: 'invalid_type',
+        actualType: typeof date
+      });
+    }
+
+    if (color !== undefined && color !== null && typeof color !== 'string') {
+      return validationErrorResponse(res, '目标颜色必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'color',
+        reason: 'invalid_type',
+        actualType: typeof color
+      });
+    }
+
     if (color && !COLOR_REGEX.test(color)) {
       return validationErrorResponse(res, '颜色格式无效，请使用 #RRGGBB 格式', ErrorCodes.GOAL_COLOR_INVALID, {
         field: 'color',
@@ -114,6 +146,7 @@ exports.createGoal = async (req, res) => {
       color: color || '#3498db',
       description: description?.trim() || '',
       date: date?.trim() || '',
+      order: typeof req.body.order === 'number' ? req.body.order : null,
       userId: req.user.id
     };
     
@@ -144,6 +177,14 @@ exports.updateGoal = async (req, res) => {
     const goalId = req.params.id;
 
     if (title !== undefined) {
+      if (typeof title !== 'string') {
+        return validationErrorResponse(res, '目标标题必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+          field: 'title',
+          reason: 'invalid_type',
+          actualType: typeof title
+        });
+      }
+
       if (title.trim() === '') {
         return validationErrorResponse(res, '目标标题不能为空', ErrorCodes.GOAL_TITLE_EMPTY, {
           field: 'title',
@@ -159,6 +200,30 @@ exports.updateGoal = async (req, res) => {
           actualLength: title.length
         });
       }
+    }
+
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return validationErrorResponse(res, '目标描述必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'description',
+        reason: 'invalid_type',
+        actualType: typeof description
+      });
+    }
+
+    if (date !== undefined && date !== null && typeof date !== 'string') {
+      return validationErrorResponse(res, '目标日期必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'date',
+        reason: 'invalid_type',
+        actualType: typeof date
+      });
+    }
+
+    if (color !== undefined && color !== null && typeof color !== 'string') {
+      return validationErrorResponse(res, '目标颜色必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'color',
+        reason: 'invalid_type',
+        actualType: typeof color
+      });
     }
 
     if (color !== undefined && color !== '' && !COLOR_REGEX.test(color)) {
@@ -190,7 +255,8 @@ exports.updateGoal = async (req, res) => {
 
     const updateData = {};
     if (title !== undefined) updateData.title = title.trim();
-    if (color !== undefined && color !== '') updateData.color = color;
+    // 允许显式清空颜色：'' 转为 null（未设置），此前空串被跳过导致已设颜色无法清除
+    if (color !== undefined) updateData.color = color === '' ? null : color;
     if (description !== undefined) updateData.description = description?.trim() || '';
     if (date !== undefined) updateData.date = date?.trim() || '';
     
@@ -281,6 +347,20 @@ exports.reorderGoals = async (req, res) => {
         field: 'goalIds',
         reason: 'empty_array'
       });
+    }
+
+    // 元素类型校验：对象/数组等非 string/number 元素直接传给 getGoalById 会触发
+    // sqlite 绑定异常(500) / fileDB 404，双模式不一致，统一提前 400
+    for (const id of goalIds) {
+      const isValidId = (typeof id === 'string' && id.trim() !== '') ||
+        (typeof id === 'number' && Number.isFinite(id));
+      if (!isValidId) {
+        return validationErrorResponse(res, '目标ID必须是字符串或数字', ErrorCodes.VALIDATION_FORMAT, {
+          field: 'goalIds',
+          reason: 'invalid_element_type',
+          actualType: typeof id
+        });
+      }
     }
 
     for (const id of goalIds) {

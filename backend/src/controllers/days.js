@@ -23,7 +23,6 @@ const {
 const { ErrorCodes } = require('../utils/errors');
 const { validateString } = require('../middleware/validate');
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function validateTimeFormat(time) {
@@ -31,7 +30,8 @@ function validateTimeFormat(time) {
 }
 
 function validateDateFormat(date) {
-  return DATE_REGEX.test(date);
+  // 使用完整日期校验（格式 + 真实日期存在性，如 2024-02-31 无效），与 range 查询及 middleware 保持一致
+  return dateUtils.isValidDateString(date);
 }
 
 function validateTimeEntry(entry, index) {
@@ -41,6 +41,15 @@ function validateTimeEntry(entry, index) {
     errors.push({
       field: `timeEntries[${index}].goalId`,
       message: '时间条目缺少目标ID'
+    });
+  } else if (typeof entry.goalId !== 'string' && typeof entry.goalId !== 'number') {
+    // 类型未校验时，对象/数组会被 better-sqlite3 绑定抛 RangeError → 500
+    errors.push({
+      field: `timeEntries[${index}].goalId`,
+      message: '目标ID类型无效，必须是字符串或数字',
+      // 与单条保存路径一致：goalId 类型错误用 VAL_002（validateTimeEntriesWithGoals 同款），
+      // 其余时间字段错误保持 DAY_004
+      errorCode: ErrorCodes.VALIDATION_FORMAT
     });
   }
   
@@ -84,7 +93,17 @@ async function validateTimeEntriesWithGoals(timeEntries, userId) {
   for (let i = 0; i < timeEntries.length; i++) {
     const entry = timeEntries[i];
     
+    // 元素守卫：null/undefined/原始值/数组直接 400（与 batch validateBatchDayContent 同款），
+    // 防止 entry.goalId 对 null 抛 TypeError → 500（P3-1 兄弟路径）
+    if (!entry || typeof entry !== 'object') {
+      return { error: { response: validationErrorResponse, args: [`时间条目格式无效，必须是对象`, ErrorCodes.VALIDATION_FORMAT, { field: `timeEntries[${i}]`, index: i }] } };
+    }
+    
     if (entry.goalId && entry.goalId.toString().trim() !== '') {
+      // 必须先校验类型：对象/数组直接传给 getGoalById 会被 better-sqlite3 绑定抛 RangeError → 500
+      if (typeof entry.goalId !== 'string' && typeof entry.goalId !== 'number') {
+        return { error: { response: validationErrorResponse, args: [`时间条目目标ID类型无效，必须是字符串或数字`, ErrorCodes.VALIDATION_FORMAT, { field: `timeEntries[${i}].goalId`, goalId: entry.goalId, index: i }] } };
+      }
       const goal = await getGoalById(entry.goalId);
       if (!goal) {
         return { error: { response: validationErrorResponse, args: [`时间条目关联的目标不存在`, ErrorCodes.DAY_GOAL_NOT_FOUND, { field: `timeEntries[${i}].goalId`, goalId: entry.goalId, index: i }] } };
@@ -109,7 +128,9 @@ async function validateTimeEntriesWithGoals(timeEntries, userId) {
  * @returns {{valid: boolean, message?: string, field?: string, errorCode?: string}}
  */
 function validateBatchDayContent(day, index) {
-  if (day.summary !== undefined && typeof day.summary !== 'string') {
+  // null/undefined 放行：与单条路径一致，model 层对缺省字段（undefined/null）回读已有值，
+  // 避免 batch 条目带 null 时校验拒绝（单条路径 updateDay 会归一为 existing 值）
+  if (day.summary != null && typeof day.summary !== 'string') {
     return {
       valid: false,
       message: `第${index + 1}条日计划的 summary 必须是字符串`,
@@ -118,7 +139,7 @@ function validateBatchDayContent(day, index) {
     };
   }
 
-  if (day.tasks !== undefined) {
+  if (day.tasks != null) {
     if (!Array.isArray(day.tasks)) {
       return {
         valid: false,
@@ -148,7 +169,7 @@ function validateBatchDayContent(day, index) {
     }
   }
 
-  if (day.timeEntries !== undefined) {
+  if (day.timeEntries != null) {
     if (!Array.isArray(day.timeEntries)) {
       return {
         valid: false,
@@ -173,7 +194,8 @@ function validateBatchDayContent(day, index) {
           valid: false,
           message: `第${index + 1}条日计划：${entryErrors[0].message}`,
           field: `days[${index}].${entryErrors[0].field}`,
-          errorCode: ErrorCodes.DAY_TIME_INVALID
+          // goalId 类型错误与单条保存路径一致用 VAL_002，其余时间字段错误保持 DAY_004
+          errorCode: entryErrors[0].errorCode || ErrorCodes.DAY_TIME_INVALID
         };
       }
     }
@@ -619,6 +641,14 @@ exports.batchUpdateDays = async (req, res) => {
     // 验证所有日期格式
     for (let i = 0; i < days.length; i++) {
       const day = days[i];
+      if (day === null || typeof day !== 'object' || Array.isArray(day)) {
+        return validationErrorResponse(res, `第${i + 1}条日计划格式无效`, ErrorCodes.VALIDATION_FORMAT, {
+          field: `days[${i}]`,
+          reason: 'must_be_object',
+          actualType: day === null ? 'null' : typeof day,
+          index: i
+        });
+      }
       if (!day.date) {
         return validationErrorResponse(res, `第${i + 1}条日计划缺少日期`, ErrorCodes.VALIDATION_REQUIRED, {
           field: `days[${i}].date`,
@@ -639,6 +669,18 @@ exports.batchUpdateDays = async (req, res) => {
           field: contentValidation.field,
           index: i
         });
+      }
+    }
+
+    // 与单条保存路径一致：校验每条 timeEntries 的 goalId 存在性与归属，
+    // 防止通过 batch 写入跨用户/不存在的 goalId 导致后续单条保存必 400 数据卡死
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
+      if (day.timeEntries && Array.isArray(day.timeEntries) && day.timeEntries.length > 0) {
+        const validation = await validateTimeEntriesWithGoals(day.timeEntries, req.user.id);
+        if (validation.error) {
+          return validation.error.response(res, ...validation.error.args);
+        }
       }
     }
 

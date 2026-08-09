@@ -38,6 +38,30 @@ exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    if (typeof username !== 'string') {
+      return validationErrorResponse(res, '用户名必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'username',
+        reason: 'must_be_string',
+        actualType: typeof username
+      });
+    }
+
+    if (typeof email !== 'string') {
+      return validationErrorResponse(res, '邮箱必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'email',
+        reason: 'must_be_string',
+        actualType: typeof email
+      });
+    }
+
+    if (typeof password !== 'string') {
+      return validationErrorResponse(res, '密码必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'password',
+        reason: 'must_be_string',
+        actualType: typeof password
+      });
+    }
+
     if (!username || username.trim() === '') {
       return validationErrorResponse(res, '用户名不能为空', ErrorCodes.VALIDATION_REQUIRED, {
         field: 'username',
@@ -100,7 +124,9 @@ exports.register = async (req, res) => {
       });
     }
 
-    const existingUser = await findUserByEmail(email);
+    // 邮箱统一小写后查重，与存储时 email.trim().toLowerCase() 保持一致，
+    // 避免 fileDB 模式注册同邮箱大小写变体产生无法登录的死账户
+    const existingUser = await findUserByEmail(email.trim().toLowerCase());
     if (existingUser) {
       return conflictResponse(res, '该邮箱已被注册', ErrorCodes.REG_EMAIL_EXISTS, {
         field: 'email',
@@ -162,6 +188,23 @@ exports.register = async (req, res) => {
         reason: 'already_exists'
       });
     }
+
+    // SQLite UNIQUE 约束冲突（并发注册绕过查重直接触底时），兼容两种错误消息格式：
+    // "UNIQUE constraint failed: users.email" / "UNIQUE constraint failed: users.username"
+    if (error.message && error.message.includes('UNIQUE constraint failed')) {
+      if (error.message.includes('users.email')) {
+        return conflictResponse(res, '该邮箱已被注册', ErrorCodes.REG_EMAIL_EXISTS, {
+          field: 'email',
+          reason: 'already_exists'
+        });
+      }
+      if (error.message.includes('users.username')) {
+        return conflictResponse(res, '该用户名已被使用', ErrorCodes.REG_USERNAME_EXISTS, {
+          field: 'username',
+          reason: 'already_exists'
+        });
+      }
+    }
     
     return serverErrorResponse(res, '注册失败，请稍后重试');
   }
@@ -170,6 +213,22 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (typeof email !== 'string') {
+      return validationErrorResponse(res, '邮箱必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'email',
+        reason: 'must_be_string',
+        actualType: typeof email
+      });
+    }
+
+    if (typeof password !== 'string') {
+      return validationErrorResponse(res, '密码必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'password',
+        reason: 'must_be_string',
+        actualType: typeof password
+      });
+    }
 
     if (!email || email.trim() === '') {
       return validationErrorResponse(res, '请输入邮箱地址', ErrorCodes.VALIDATION_REQUIRED, {
@@ -189,8 +248,9 @@ exports.login = async (req, res) => {
 
     if (!user) {
       console.warn('[登录失败] 用户不存在', { email: email.trim().toLowerCase() });
-      return unauthorizedResponse(res, '该邮箱未注册', ErrorCodes.LOGIN_USER_NOT_FOUND, {
-        reason: 'user_not_found'
+      // 与"密码错误"返回完全相同的响应，避免通过接口枚举已注册邮箱
+      return unauthorizedResponse(res, '邮箱或密码错误', ErrorCodes.LOGIN_WRONG_PASSWORD, {
+        reason: 'invalid_credentials'
       });
     }
 
@@ -198,8 +258,8 @@ exports.login = async (req, res) => {
 
     if (!isMatch) {
       console.warn('[登录失败] 密码错误', { email: email.trim().toLowerCase() });
-      return unauthorizedResponse(res, '密码错误', ErrorCodes.LOGIN_WRONG_PASSWORD, {
-        reason: 'wrong_password'
+      return unauthorizedResponse(res, '邮箱或密码错误', ErrorCodes.LOGIN_WRONG_PASSWORD, {
+        reason: 'invalid_credentials'
       });
     }
 
@@ -263,6 +323,12 @@ exports.getMe = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
+
+    if (typeof refreshToken !== 'string') {
+      return unauthorizedResponse(res, '请提供刷新令牌', ErrorCodes.AUTH_TOKEN_MISSING, {
+        reason: 'refresh_token_missing'
+      });
+    }
 
     if (!refreshToken) {
       return unauthorizedResponse(res, '请提供刷新令牌', ErrorCodes.AUTH_TOKEN_MISSING, {
@@ -336,6 +402,12 @@ exports.logout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
     
+    if (refreshToken !== undefined && typeof refreshToken !== 'string') {
+      return unauthorizedResponse(res, '无效的刷新令牌', ErrorCodes.AUTH_TOKEN_INVALID, {
+        reason: 'refresh_token_invalid'
+      });
+    }
+
     if (refreshToken) {
       // 校验 refreshToken 是否属于当前用户
       const tokenData = await findRefreshToken(refreshToken);

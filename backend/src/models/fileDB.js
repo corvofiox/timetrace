@@ -19,12 +19,15 @@ const ensureDataDir = async () => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// 统一的锁参数：读写路径保持一致，避免慢写时读方按更短的 stale 抢占锁读到半截 JSON
+const LOCK_OPTIONS = { retries: 5, stale: 10000, minTimeout: 50, maxTimeout: 200 };
+
 const readJsonFile = async (filePath, retryCount = 0) => {
   const MAX_RETRIES = 3;
   let release;
   try {
     await ensureDataDir();
-    release = await lockfile.lock(filePath, { retries: 3, stale: 5000, minTimeout: 50, maxTimeout: 200 });
+    release = await lockfile.lock(filePath, LOCK_OPTIONS);
     const data = await fs.readFile(filePath, 'utf8');
     if (!data.trim()) {
       return [];
@@ -40,7 +43,8 @@ const readJsonFile = async (filePath, retryCount = 0) => {
         return readJsonFile(filePath, retryCount + 1);
       }
       console.error('Lock acquisition failed after max retries:', filePath);
-      return [];
+      // 锁竞争/锁失效时抛错而非静默返回 []，避免登录/查重误报"不存在"
+      throw error;
     }
     if (error instanceof SyntaxError) {
       console.warn('Corrupted JSON file, returning empty array:', filePath, error.message);
@@ -63,7 +67,7 @@ const writeJsonFile = async (filePath, data, retryCount = 0) => {
   let release;
   try {
     await ensureDataDir();
-    release = await lockfile.lock(filePath, { retries: 5, stale: 10000, minTimeout: 50, maxTimeout: 200 });
+    release = await lockfile.lock(filePath, LOCK_OPTIONS);
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
   } catch (error) {
     if (error.code === 'ELOCKED') {
@@ -90,7 +94,7 @@ const atomicUpdate = async (filePath, updateFn) => {
   let release;
   try {
     await ensureDataDir();
-    release = await lockfile.lock(filePath, { retries: 5, stale: 10000, minTimeout: 50, maxTimeout: 200 });
+    release = await lockfile.lock(filePath, LOCK_OPTIONS);
     const data = await fs.readFile(filePath, 'utf8');
     const currentData = data.trim() ? JSON.parse(data) : [];
     const updatedData = await updateFn(currentData);
@@ -261,17 +265,23 @@ const goals = {
   // 批量更新目标顺序
   reorder: async (goalIds) => {
     return await atomicUpdate(GOALS_FILE, (allGoals) => {
+      // 只更新列出的目标：按传入顺序分配 order 0..n-1，仅当 order 实际变化时才 bump updatedAt。
+      // 未列入的目标（含其他用户的目标）完全不动，与 sqliteDB 语义统一，避免跨用户改写与时间戳漂移
+      const orderMap = new Map();
+      goalIds.forEach((id, index) => orderMap.set(id.toString(), index));
+      const now = new Date();
+
       return allGoals.map(goal => {
-        const index = goalIds.findIndex(id => id.toString() === goal.id.toString());
-        if (index !== -1) {
-          return {
-            ...goal,
-            order: index,
-            updatedAt: new Date()
-          };
-        }
-        // 保留未参与排序目标的现有顺序
-        return goal;
+        const index = orderMap.get(goal.id.toString());
+        // 未列入的目标：不触碰
+        if (index === undefined) return goal;
+        // order 未变化：不 bump updatedAt
+        if (goal.order === index) return goal;
+        return {
+          ...goal,
+          order: index,
+          updatedAt: now
+        };
       });
     });
   }
@@ -367,27 +377,47 @@ const days = {
 
   // 创建或更新日计划
   createOrUpdate: async (dayData) => {
-    // 预先计算是否为空数据，避免重复计算
-    const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
-    const areTasksEmpty = !Array.isArray(dayData.tasks) || dayData.tasks.length === 0;
-    const areTimeEntriesEmpty = !Array.isArray(dayData.timeEntries) || dayData.timeEntries.length === 0;
-    const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
+    // undefined/null 字段视为"未提供"（锁内基于已有记录补全后再判定是否全空删除），
+    // 非数组的 tasks/timeEntries 按空数组处理，防止脏数据入库
+    const summaryProvided = dayData.summary !== undefined && dayData.summary !== null;
+    const tasksProvided = dayData.tasks !== undefined && dayData.tasks !== null;
+    const timeEntriesProvided = dayData.timeEntries !== undefined && dayData.timeEntries !== null;
 
-    // 非数组的 tasks/timeEntries 一律按空数组处理，防止脏数据入库
     const normalizedData = {
       ...dayData,
-      tasks: Array.isArray(dayData.tasks) ? dayData.tasks : [],
-      timeEntries: Array.isArray(dayData.timeEntries) ? dayData.timeEntries : []
+      summary: summaryProvided ? dayData.summary : undefined,
+      tasks: tasksProvided ? (Array.isArray(dayData.tasks) ? dayData.tasks : []) : undefined,
+      timeEntries: timeEntriesProvided ? (Array.isArray(dayData.timeEntries) ? dayData.timeEntries : []) : undefined
     };
+
+    // 记录锁内实际执行的操作结果（删除/更新/新建），供 then 阶段返回
+    let operationResult = null;
 
     try {
       return await atomicUpdate(DAYS_FILE, async (allDays) => {
         let existingDay = allDays.find(day => day.date === normalizedData.date && day.userId === normalizedData.userId);
-        
+
         // 如果日期+用户ID查找未匹配，尝试通过ID查找（更新场景的兜底）
         if (!existingDay && normalizedData.id) {
           existingDay = allDays.find(day => day.id.toString() === normalizedData.id.toString());
         }
+
+        // 基于锁内最新数据补全缺省字段，避免部分更新被误判为"全空"而删除整条记录
+        // 例如 POST {date, tasks:[]} 缺少 summary/timeEntries 时不再误删已有日计划
+        const effectiveSummary = normalizedData.summary !== undefined
+          ? normalizedData.summary
+          : (existingDay ? existingDay.summary : '');
+        const effectiveTasks = normalizedData.tasks !== undefined
+          ? normalizedData.tasks
+          : (existingDay ? existingDay.tasks : []);
+        const effectiveTimeEntries = normalizedData.timeEntries !== undefined
+          ? normalizedData.timeEntries
+          : (existingDay ? existingDay.timeEntries : []);
+
+        const isSummaryEmpty = !effectiveSummary || String(effectiveSummary).trim() === '';
+        const areTasksEmpty = !Array.isArray(effectiveTasks) || effectiveTasks.length === 0;
+        const areTimeEntriesEmpty = !Array.isArray(effectiveTimeEntries) || effectiveTimeEntries.length === 0;
+        const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
         if (shouldDelete) {
           // 如果备注和任务都为空，删除现有条目（如果存在）
@@ -398,6 +428,7 @@ const days = {
               allDays.splice(index, 1);
             }
           }
+          operationResult = { deleted: true, message: 'No data to save' };
           return allDays;
         }
 
@@ -409,10 +440,14 @@ const days = {
             allDays[index] = {
               ...allDays[index],
               ...normalizedData,
+              summary: effectiveSummary,
+              tasks: effectiveTasks,
+              timeEntries: effectiveTimeEntries,
               id: existingDay.id || allDays[index].id,
               createdAt: allDays[index].createdAt,
               updatedAt: new Date()
             };
+            operationResult = null;
             return allDays;
           }
         }
@@ -420,15 +455,18 @@ const days = {
         // 创建新日计划
         const newDay = {
           ...normalizedData,
+          summary: effectiveSummary,
+          tasks: effectiveTasks,
+          timeEntries: effectiveTimeEntries,
           id: await generateId('days'),
           createdAt: new Date()
         };
         allDays.push(newDay);
+        operationResult = null;
         return allDays;
       }).then((updatedDays) => {
-        // 使用预先计算的结果，避免重复计算
-        if (shouldDelete) {
-          return { deleted: true, message: 'No data to save' };
+        if (operationResult && operationResult.deleted) {
+          return operationResult;
         }
 
         // 查找操作后的结果（更新或新建）
@@ -440,7 +478,7 @@ const days = {
         error: error.message,
         date: normalizedData.date,
         userId: normalizedData.userId,
-        operation: shouldDelete ? 'delete' : (normalizedData.id ? 'update' : 'create')
+        operation: operationResult && operationResult.deleted ? 'delete' : (normalizedData.id ? 'update' : 'create')
       });
       throw error;
     }
@@ -475,31 +513,48 @@ const days = {
       for (const day of days) {
         const key = `${day.date}:${day.userId || ''}`;
         affectedKeys.push(key);
-        const isSummaryEmpty = !day.summary || day.summary.trim() === '';
-        const areTasksEmpty = !Array.isArray(day.tasks) || day.tasks.length === 0;
-        const areTimeEntriesEmpty = !Array.isArray(day.timeEntries) || day.timeEntries.length === 0;
+        const existingDay = allDaysMap.get(key);
+
+        // effective 语义（与单条 save/createOrUpdate 对齐）：缺省字段（undefined/null）回读已有值，
+        // 删除判定基于合并后的 effective 值——缺 summary + 显式 tasks:[] 时保留已有 summary 不清空不误删
+        const summary = day.summary !== undefined && day.summary !== null
+          ? day.summary
+          : (existingDay && existingDay.summary !== undefined ? existingDay.summary : '');
+        const tasks = day.tasks !== undefined && day.tasks !== null
+          ? day.tasks
+          : (existingDay && existingDay.tasks !== undefined ? existingDay.tasks : []);
+        const timeEntries = day.timeEntries !== undefined && day.timeEntries !== null
+          ? day.timeEntries
+          : (existingDay && existingDay.timeEntries !== undefined ? existingDay.timeEntries : []);
+
+        const isSummaryEmpty = !summary || String(summary).trim() === '';
+        const areTasksEmpty = !Array.isArray(tasks) || tasks.length === 0;
+        const areTimeEntriesEmpty = !Array.isArray(timeEntries) || timeEntries.length === 0;
 
         if (isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty) {
           allDaysMap.delete(key);
         } else {
-          const existingDay = allDaysMap.get(key);
           const now = new Date();
           let mergedDay;
           if (existingDay && existingDay.id) {
-            // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段
+            // 合并现有字段，避免丢失 timeEntries 等未包含在 batch 中的字段；
+            // createdAt 显式兜底（spread 之后），客户端 batch payload 无法改写真实创建时间（与单条 save 对齐）
             mergedDay = {
               ...existingDay,
               ...day,
-              tasks: Array.isArray(day.tasks) ? day.tasks : [],
-              timeEntries: Array.isArray(day.timeEntries) ? day.timeEntries : [],
+              summary,
+              tasks,
+              timeEntries,
               id: existingDay.id,
+              createdAt: existingDay.createdAt,
               updatedAt: now
             };
           } else {
             mergedDay = {
               ...day,
-              tasks: Array.isArray(day.tasks) ? day.tasks : [],
-              timeEntries: Array.isArray(day.timeEntries) ? day.timeEntries : [],
+              summary,
+              tasks,
+              timeEntries,
               id: await generateId('days'),
               createdAt: now
             };

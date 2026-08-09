@@ -216,6 +216,20 @@ function validateArray(value, fieldName) {
   return { valid: true };
 }
 
+// 校验失败原因 → 错误码映射：格式/类型错误不应统一报 VALIDATION_REQUIRED(VAL_001)
+const VALIDATION_ERROR_CODE_BY_REASON = {
+  required: ErrorCodes.VALIDATION_REQUIRED,
+  empty_array: ErrorCodes.VALIDATION_REQUIRED,
+  invalid_type: ErrorCodes.VALIDATION_FORMAT,
+  invalid_format: ErrorCodes.VALIDATION_FORMAT,
+  invalid_date: ErrorCodes.VALIDATION_FORMAT,
+  min_length: ErrorCodes.VALIDATION_LENGTH,
+  max_length: ErrorCodes.VALIDATION_LENGTH,
+  min_value: ErrorCodes.VALIDATION_RANGE,
+  max_value: ErrorCodes.VALIDATION_RANGE,
+  too_many_items: ErrorCodes.VALIDATION_RANGE
+};
+
 function validate(rules) {
   return (req, res, next) => {
     const errors = [];
@@ -271,7 +285,8 @@ function validate(rules) {
     
     if (errors.length > 0) {
       const firstError = errors[0];
-      return validationErrorResponse(res, firstError.message, ErrorCodes.VALIDATION_REQUIRED, {
+      const errorCode = VALIDATION_ERROR_CODE_BY_REASON[firstError.reason] || ErrorCodes.VALIDATION_FORMAT;
+      return validationErrorResponse(res, firstError.message, errorCode, {
         field: firstError.field,
         reason: firstError.reason,
         allErrors: errors

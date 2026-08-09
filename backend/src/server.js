@@ -55,7 +55,22 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+// 批量更新(100 天×多任务) payload 较大，默认 100kb 会触发 413，放宽到 2mb
+app.use(express.json({ limit: '2mb' }));
+
+// 请求体超限(413)友好提示：捕获 express.json 抛出的 entity.too.large 错误，
+// 避免落入全局兜底 500
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: '请求体过大，请减少批量数据量后重试（上限 2MB）',
+      errorCode: 'PAYLOAD_TOO_LARGE',
+      details: { reason: 'body_too_large', limit: '2mb' }
+    });
+  }
+  next(err);
+});
 
 // Rate limiting for auth routes (brute-force protection)
 const authLimiter = rateLimit({

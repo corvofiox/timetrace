@@ -226,10 +226,16 @@ const goals = {
   },
 
   reorder: (goalIds) => {
+    // 只更新列出的目标：按传入顺序分配 order 0..n-1，仅当 order 实际变化时才更新并 bump updatedAt。
+    // 未列入的目标（含其他用户的目标）完全不动，与 fileDB 语义统一，避免跨用户改写与时间戳漂移
+    const selectStmt = db.prepare('SELECT [order] FROM goals WHERE id = ?');
     const updateStmt = db.prepare('UPDATE goals SET [order] = ?, updatedAt = ? WHERE id = ?');
     const now = serializeDate(new Date());
     const updateTransaction = db.transaction(() => {
       goalIds.forEach((id, index) => {
+        const existing = selectStmt.get(id);
+        // 目标不存在(已删除)或 order 未变化：跳过，不 bump updatedAt
+        if (!existing || existing.order === index) return;
         updateStmt.run(index, now, id);
       });
     });
@@ -239,12 +245,23 @@ const goals = {
 };
 
 // 日计划数据操作
+// 容错解析 JSON 字段：脏数据(非 JSON 字符串)不抛 500，降级为空值并告警
+const safeJsonParse = (value, fallback = []) => {
+  if (value === null || value === undefined || value === '') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('[sqliteDB] 解析 JSON 字段失败，使用空值兜底:', error.message);
+    return fallback;
+  }
+};
+
 const parseDayRow = (row) => {
   if (!row) return null;
   return {
     ...row,
-    tasks: JSON.parse(row.tasks || '[]'),
-    timeEntries: JSON.parse(row.timeEntries || '[]'),
+    tasks: safeJsonParse(row.tasks, []),
+    timeEntries: safeJsonParse(row.timeEntries, []),
     createdAt: deserializeDate(row.createdAt),
     updatedAt: deserializeDate(row.updatedAt)
   };
@@ -311,12 +328,24 @@ const days = {
   },
 
   createOrUpdate: (dayData) => {
-    const isSummaryEmpty = !dayData.summary || dayData.summary.trim() === '';
-    const areTasksEmpty = !Array.isArray(dayData.tasks) || dayData.tasks.length === 0;
-    const areTimeEntriesEmpty = !Array.isArray(dayData.timeEntries) || dayData.timeEntries.length === 0;
-    const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
-
     const existing = days.findByDate(dayData.date, dayData.userId);
+
+    // 未提供的字段(undefined/null)回读已有值，避免部分更新被误判为"全空"而删除整条记录。
+    // 例如 POST {date, tasks:[]} 缺少 summary/timeEntries 时不再误删已有日计划。
+    const summary = dayData.summary !== undefined && dayData.summary !== null
+      ? dayData.summary
+      : (existing ? existing.summary : '');
+    const tasks = dayData.tasks !== undefined && dayData.tasks !== null
+      ? dayData.tasks
+      : (existing ? existing.tasks : []);
+    const timeEntries = dayData.timeEntries !== undefined && dayData.timeEntries !== null
+      ? dayData.timeEntries
+      : (existing ? existing.timeEntries : []);
+
+    const isSummaryEmpty = !summary || String(summary).trim() === '';
+    const areTasksEmpty = !Array.isArray(tasks) || tasks.length === 0;
+    const areTimeEntriesEmpty = !Array.isArray(timeEntries) || timeEntries.length === 0;
+    const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
     if (shouldDelete) {
       if (existing) {
@@ -326,14 +355,14 @@ const days = {
     }
 
     const now = serializeDate(new Date());
-    const tasksJson = JSON.stringify(Array.isArray(dayData.tasks) ? dayData.tasks : []);
-    const timeEntriesJson = JSON.stringify(Array.isArray(dayData.timeEntries) ? dayData.timeEntries : []);
+    const tasksJson = JSON.stringify(Array.isArray(tasks) ? tasks : []);
+    const timeEntriesJson = JSON.stringify(Array.isArray(timeEntries) ? timeEntries : []);
 
     if (existing) {
       db.prepare(
         'UPDATE days SET summary = ?, tasks = ?, timeEntries = ?, updatedAt = ? WHERE id = ?'
       ).run(
-        dayData.summary || '',
+        summary || '',
         tasksJson,
         timeEntriesJson,
         now,
@@ -347,7 +376,7 @@ const days = {
     ).run(
       dayData.userId,
       dayData.date,
-      dayData.summary || '',
+      summary || '',
       tasksJson,
       timeEntriesJson,
       now
@@ -363,6 +392,7 @@ const days = {
   },
 
   batchUpdate: (daysList) => {
+    const selectStmt = db.prepare('SELECT * FROM days WHERE userId = ? AND date = ?');
     const updateStmt = db.prepare(
       'UPDATE days SET summary = ?, tasks = ?, timeEntries = ?, updatedAt = ? WHERE userId = ? AND date = ?'
     );
@@ -375,22 +405,36 @@ const days = {
 
     const batchTransaction = db.transaction(() => {
       daysList.forEach(day => {
-        const isSummaryEmpty = !day.summary || day.summary.trim() === '';
-        const areTasksEmpty = !Array.isArray(day.tasks) || day.tasks.length === 0;
-        const areTimeEntriesEmpty = !Array.isArray(day.timeEntries) || day.timeEntries.length === 0;
+        // effective 语义（与单条 createOrUpdate 对齐）：缺省字段（undefined/null）先读现有行回读原值，
+        // 删除判定基于合并后的 effective 值——缺 summary + 显式 tasks:[] 时保留已有 summary 不清空不误删
+        const existing = selectStmt.get(day.userId, day.date);
+        const summary = day.summary !== undefined && day.summary !== null
+          ? day.summary
+          : (existing ? existing.summary : '');
+        const tasks = day.tasks !== undefined && day.tasks !== null
+          ? day.tasks
+          : (existing ? safeJsonParse(existing.tasks, []) : []);
+        const timeEntries = day.timeEntries !== undefined && day.timeEntries !== null
+          ? day.timeEntries
+          : (existing ? safeJsonParse(existing.timeEntries, []) : []);
+
+        const isSummaryEmpty = !summary || String(summary).trim() === '';
+        const areTasksEmpty = !Array.isArray(tasks) || tasks.length === 0;
+        const areTimeEntriesEmpty = !Array.isArray(timeEntries) || timeEntries.length === 0;
         const shouldDelete = isSummaryEmpty && areTasksEmpty && areTimeEntriesEmpty;
 
         if (shouldDelete) {
           deleteStmt.run(day.userId, day.date);
+          return;
+        }
+
+        const tasksJson = JSON.stringify(Array.isArray(tasks) ? tasks : []);
+        const timeEntriesJson = JSON.stringify(Array.isArray(timeEntries) ? timeEntries : []);
+
+        if (existing) {
+          updateStmt.run(summary || '', tasksJson, timeEntriesJson, now, day.userId, day.date);
         } else {
-          const existing = db.prepare('SELECT id FROM days WHERE userId = ? AND date = ?').get(day.userId, day.date);
-          const tasksJson = JSON.stringify(Array.isArray(day.tasks) ? day.tasks : []);
-          const timeEntriesJson = JSON.stringify(Array.isArray(day.timeEntries) ? day.timeEntries : []);
-          if (existing) {
-            updateStmt.run(day.summary || '', tasksJson, timeEntriesJson, now, day.userId, day.date);
-          } else {
-            insertStmt.run(day.userId, day.date, day.summary || '', tasksJson, timeEntriesJson, now);
-          }
+          insertStmt.run(day.userId, day.date, summary || '', tasksJson, timeEntriesJson, now);
         }
       });
     });
@@ -420,8 +464,11 @@ const refreshTokens = {
 
   save: (token, userId) => {
     const now = serializeDate(new Date());
-    db.prepare('DELETE FROM refreshTokens WHERE userId = ?').run(userId);
-    db.prepare('INSERT INTO refreshTokens (token, userId, createdAt) VALUES (?, ?, ?)').run(token, userId, now);
+    // DELETE+INSERT 放入同一事务，避免 INSERT 失败时旧令牌已删、新令牌未存导致用户被登出
+    db.transaction(() => {
+      db.prepare('DELETE FROM refreshTokens WHERE userId = ?').run(userId);
+      db.prepare('INSERT INTO refreshTokens (token, userId, createdAt) VALUES (?, ?, ?)').run(token, userId, now);
+    })();
   },
 
   find: (token, maxAgeDays = 7) => {
@@ -449,9 +496,12 @@ const refreshTokens = {
 
   rotate: (oldToken, newToken, userId) => {
     const now = serializeDate(new Date());
-    db.prepare('DELETE FROM refreshTokens WHERE token = ?').run(oldToken);
-    db.prepare('DELETE FROM refreshTokens WHERE userId = ?').run(userId);
-    db.prepare('INSERT INTO refreshTokens (token, userId, createdAt) VALUES (?, ?, ?)').run(newToken, userId, now);
+    // DELETE+INSERT 放入同一事务，避免 INSERT 失败时旧令牌已删、新令牌未存导致用户被登出
+    db.transaction(() => {
+      db.prepare('DELETE FROM refreshTokens WHERE token = ?').run(oldToken);
+      db.prepare('DELETE FROM refreshTokens WHERE userId = ?').run(userId);
+      db.prepare('INSERT INTO refreshTokens (token, userId, createdAt) VALUES (?, ?, ?)').run(newToken, userId, now);
+    })();
     return { token: newToken, userId, createdAt: deserializeDate(now) };
   },
 

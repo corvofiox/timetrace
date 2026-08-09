@@ -14,6 +14,8 @@ services:
       - DATA_DIR=/app/data
       - DB_TYPE=sqlite
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-change-me-in-production}
+      # 密钥必须显式设置（或在容器内 .env 中提供），不再提供公开弱默认值：
+      # 未设置时后端会在启动时拒绝运行并打印错误，防止部署即用公开密钥被伪造 JWT
+      - JWT_SECRET=${JWT_SECRET:-}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-}
     restart: unless-stopped

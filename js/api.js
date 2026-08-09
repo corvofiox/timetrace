@@ -4,11 +4,31 @@ const api = {
     
     // 跨标签页刷新协调
     _refreshChannel: null,
+    // 当前标签页登录用户 id（可能未加载完成时为 null）：
+    // 广播令牌时携带、接收时校验，防止登出标签页被其他账号的轮换广播写入令牌（R2F-7）
+    _getLocalUserId() {
+        try {
+            if (typeof appData !== 'undefined' && appData.user && appData.user.id !== undefined && appData.user.id !== null) {
+                return appData.user.id;
+            }
+        } catch (e) {
+            // app.js 尚未加载完成时忽略
+        }
+        return null;
+    },
     _getRefreshChannel() {
         if (!this._refreshChannel) {
             this._refreshChannel = new BroadcastChannel('timetrace-token-refresh');
             this._refreshChannel.onmessage = (event) => {
-                const { token, refreshToken } = event.data;
+                const { token, refreshToken, userId } = event.data || {};
+                // R2F-7: 令牌广播按用户作用域隔离——仅当发送方 userId 与本地当前
+                // 登录用户一致时才写入。本地未登录（无 userId）或用户不同一律拒绝：
+                // 否则标签页 A 登出后，B 的 token 轮换广播会把 B 的 token 写入 A 的
+                // localStorage，A 刷新即以 B 身份登录。
+                const localUserId = this._getLocalUserId();
+                if (localUserId === null || String(localUserId) !== String(userId)) {
+                    return;
+                }
                 if (token) {
                     this._safeSetItem('token', token);
                 }
@@ -22,7 +42,7 @@ const api = {
     _broadcastTokens(token, refreshToken) {
         try {
             const channel = this._getRefreshChannel();
-            channel.postMessage({ token, refreshToken });
+            channel.postMessage({ token, refreshToken, userId: this._getLocalUserId() });
         } catch (e) {
             // BroadcastChannel not supported — fall back to polling
         }
@@ -193,7 +213,34 @@ const api = {
                 }
             } catch (refreshError) {
                 console.error('[API] 刷新令牌失败:', refreshError);
+                // 网络瞬时错误（fetch 失败/超时）：不删令牌、不强制登出，抛可重试的网络错误；
+                // 仅当 refresh 请求确认失败（HTTP 401/无效令牌）时才清理令牌并登出
+                if (refreshError && (
+                    refreshError.errorCode === 'NETWORK_ERROR' ||
+                    refreshError.errorCode === 'TIMEOUT' ||
+                    refreshError instanceof TypeError ||
+                    (refreshError.message && (
+                        refreshError.message.includes('Failed to fetch') ||
+                        refreshError.message.toLowerCase().includes('network')
+                    ))
+                )) {
+                    const error = {
+                        success: false,
+                        errorCode: 'NETWORK_ERROR',
+                        message: '网络连接失败，请检查网络设置',
+                        details: { originalError: refreshError.message || refreshError.errorCode }
+                    };
+                    throw error;
+                }
                 this.removeTokens();
+                // R2F-2: 强制登出与 handleLogout 行为对称——通知 app.js 递增 sessionEpoch
+                // 并清空 pending/reorderQueue/daySaveQueue，防止旧账号的排队编辑/残留队列
+                // 串入下一个登录账号（仅切 DOM 会导致换账号后旧 pending 渲染进新账号）
+                try {
+                    window.dispatchEvent(new CustomEvent('auth:force-logout'));
+                } catch (e) {
+                    // 事件派发失败不影响强制登出本身
+                }
                 this.showLoginScreen();
                 const error = {
                     success: false,
@@ -236,17 +283,59 @@ const api = {
             throw new Error('没有刷新令牌');
         }
         
-        // 跨标签页协调：检查是否有其他标签页正在刷新
+        // 跨标签页协调：优先使用 Web Locks API 实现原子互斥
+        // （localStorage 的 get+set 非原子是双标签页并发刷新的根源）
+        if (navigator.locks && typeof navigator.locks.request === 'function') {
+            const tokenBeforeLock = this.getToken();
+            try {
+                return await navigator.locks.request('timetrace-token-refresh', { timeout: 15000 }, async () => {
+                    // 清理旧流程可能遗留的 localStorage 锁标记
+                    localStorage.removeItem('_tokenRefreshLock');
+                    // 等待期间其他标签页可能已完成刷新（token 已变化）：直接复用
+                    const tokenAfterLock = this.getToken();
+                    if (tokenAfterLock && tokenAfterLock !== tokenBeforeLock) {
+                        return tokenAfterLock;
+                    }
+                    return this._doRefreshWithRetry(this.getRefreshToken());
+                });
+            } catch (lockError) {
+                // 等待锁超时/被中断（DOMException TimeoutError/AbortError）：属于可恢复错误，
+                // 归类为 TIMEOUT 抛出，上层按网络错误处理（不删令牌、不登出）。
+                // 若不加此归类，会走 removeTokens+登出，清掉共享 token 影响持锁标签页（C-28）
+                if ((typeof DOMException !== 'undefined' && lockError instanceof DOMException) ||
+                    lockError.name === 'TimeoutError' ||
+                    lockError.name === 'AbortError') {
+                    throw {
+                        success: false,
+                        errorCode: 'TIMEOUT',
+                        message: '刷新令牌等待超时，请重试',
+                        details: { originalError: lockError.message || lockError.name }
+                    };
+                }
+                // 锁回调内部的结构化错误（NETWORK_ERROR/AUTH_002 等）原样上抛
+                throw lockError;
+            }
+        }
+        
+        // 旧路径（无 Web Locks）：localStorage 锁 + 等待 + 兜底自刷新
         const lockKey = '_tokenRefreshLock';
         const lockTime = localStorage.getItem(lockKey);
         if (lockTime) {
             const elapsed = Date.now() - parseInt(lockTime, 10);
             if (elapsed < 10000) {
-                // 另一个标签页正在刷新，等待其结果
-                return this._waitForCrossTabRefresh();
+                try {
+                    // 另一个标签页正在刷新，等待其结果
+                    return await this._waitForCrossTabRefresh();
+                } catch (waitError) {
+                    // 等待超时/锁被清除但令牌未变：不直接登出，
+                    // 清除过期锁后自行尝试刷新（是否登出由上层按失败类型决定）
+                    console.warn('[API] 跨标签页刷新等待超时，尝试自行刷新:', waitError);
+                    localStorage.removeItem(lockKey);
+                }
+            } else {
+                // 锁过期，清除
+                localStorage.removeItem(lockKey);
             }
-            // 锁过期，清除
-            localStorage.removeItem(lockKey);
         }
         
         // 获取跨标签页锁
@@ -254,17 +343,36 @@ const api = {
         
         this._refreshPromise = (async () => {
           try {
+            return await this._doRefreshWithRetry(refreshToken);
+          } catch (error) {
+            console.error('[API] 刷新令牌失败:', error);
+            throw error;
+          } finally {
+            this._refreshPromise = null;
+            localStorage.removeItem(lockKey);
+          }
+        })();
+
+        return this._refreshPromise;
+    },
+    
+    // 刷新令牌请求（带 30s 超时；网络错误抛结构化 NETWORK_ERROR/TIMEOUT，不删令牌）
+    async _doRefreshRequest(refreshToken) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        try {
             const response = await fetch(`${this.baseURL}/auth/refresh`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ refreshToken })
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ refreshToken }),
+                signal: controller.signal
             });
             
             if (!response.ok) {
-              const error = await this.parseErrorResponse(response);
-              throw error;
+                const error = await this.parseErrorResponse(response);
+                throw error;
             }
             
             const data = await response.json();
@@ -277,16 +385,60 @@ const api = {
             this._broadcastTokens(data.token, data.refreshToken);
             
             return data.token;
-          } catch (error) {
-            console.error('[API] 刷新令牌失败:', error);
+        } catch (error) {
+            if (error && (error.name === 'AbortError' || error.errorCode === 'TIMEOUT')) {
+                throw {
+                    success: false,
+                    errorCode: 'TIMEOUT',
+                    message: '请求超时，请检查网络连接后重试',
+                    details: null
+                };
+            }
+            // 未结构化的 fetch 网络错误 → 包装为 NETWORK_ERROR（结构化错误原样抛出）
+            if (error && !error.errorCode) {
+                throw {
+                    success: false,
+                    errorCode: 'NETWORK_ERROR',
+                    message: '网络连接失败，请检查网络设置',
+                    details: { originalError: error.message || String(error) }
+                };
+            }
             throw error;
-          } finally {
-            this._refreshPromise = null;
-            localStorage.removeItem(lockKey);
-          }
-        })();
-
-        return this._refreshPromise;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    },
+    
+    // 是否认证类失败（refreshToken 无效/过期 → HTTP 401）
+    _isAuthFailure(error) {
+        if (!error) return false;
+        if (error.statusCode === 401) return true;
+        if (error.errorCode && (String(error.errorCode).startsWith('AUTH_') || String(error.errorCode).startsWith('LOGIN_'))) return true;
+        if (error.message && /401|未授权|会话已过期|invalid.*refresh|refresh.*invalid/i.test(error.message)) return true;
+        return false;
+    },
+    
+    // 刷新并允许一次额外重试：令牌刚被其他标签页轮换时，用本地最新 refreshToken 再试一次
+    async _doRefreshWithRetry(initialRefreshToken) {
+        let refreshToken = initialRefreshToken;
+        let attempts = 0;
+        const maxAttempts = 2;
+        while (attempts < maxAttempts) {
+            attempts++;
+            try {
+                return await this._doRefreshRequest(refreshToken);
+            } catch (error) {
+                const isAuthFailure = this._isAuthFailure(error);
+                const currentToken = this.getRefreshToken();
+                const tokenRotated = currentToken && currentToken !== refreshToken;
+                if (attempts < maxAttempts && isAuthFailure && tokenRotated) {
+                    refreshToken = currentToken;
+                    continue;
+                }
+                throw error;
+            }
+        }
+        throw new Error('刷新令牌失败');
     },
     
     _waitForCrossTabRefresh() {

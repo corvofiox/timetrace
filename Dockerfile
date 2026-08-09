@@ -1,5 +1,5 @@
 # 多阶段构建 - 构建阶段
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # 安装构建原生模块所需的依赖
 RUN apk add --no-cache python3 make g++
@@ -14,7 +14,7 @@ COPY backend/package*.json ./backend/
 RUN cd backend && npm ci --only=production
 
 # 生产阶段
-FROM node:18-alpine
+FROM node:20-alpine
 
 # 安装OpenSSL、curl和dos2unix用于生成密钥、健康检查和转换行尾符
 RUN apk add --no-cache openssl curl dos2unix
