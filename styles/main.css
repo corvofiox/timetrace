@@ -69,14 +69,16 @@ body {
   width: 100%;
   max-width: calc(100vw - 32px);
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-columns: clamp(220px, 17vw, 360px) minmax(0, 1fr) clamp(220px, 17vw, 360px);
+  grid-template-rows: auto 1fr; /* 弹性布局：header 行自然高，内容行吃满剩余；1fr=minmax(auto,1fr)，内容超高时撑开触发页面滚动 */
+  min-height: calc(100vh - 56px); /* body padding 上下各 28px，视口满高 */
   gap: 16px;
   align-items: start;
-  align-content: start; /* R5-1：行高取自然高度，剩余空间留底部（默认 stretch 会均分撑高 topbar 行） */
+  align-content: start; /* R5-1：行高取自然高度（现由显式 grid-template-rows 接管），剩余空间留底部 */
 }
 /* 窄屏：右栏折行到日历下方 */
 @media (max-width: 1120px) {
-  .app { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); }
+  .app { grid-template-columns: clamp(220px, 17vw, 360px) minmax(0, 1fr); }
   .app > aside.side:not(.side-goals) { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -118,7 +120,7 @@ body {
 }
 
 /* ===== 左栏 ===== */
-.side { display: flex; flex-direction: column; gap: 20px; }
+.side { display: flex; flex-direction: column; gap: 20px; container-type: inline-size; }
 .card { padding: 20px; }
 .card-title { font-size: 12px; font-weight: 600; letter-spacing: .8px; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
@@ -130,6 +132,7 @@ body {
 .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
 .mini-tasks { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
 .mini-task { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink); cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; transition: background .15s; }
+.mini-task .t { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .mini-task:hover { background: rgba(var(--accent-rgb),.08); }
 .mini-task:hover .dot-check { border-color: var(--indigo); }
 .dot-check { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--line); flex-shrink: 0; display: grid; place-items: center; font-size: 10px; color: #fff; }
@@ -221,7 +224,7 @@ body {
 }
 .gc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .gc-dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--ga), var(--gb)); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); }
-.gc-name { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gc-name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
 .gc-date { margin-left: auto; font-size: 11px; color: var(--muted); background: var(--fill-chip); padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
 .gc-count { display: flex; align-items: baseline; gap: 5px; margin-bottom: 9px; }
 .gc-unit { flex: none; white-space: nowrap; }
@@ -238,7 +241,7 @@ body {
 .gc-pct { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ===== 日历主卡 ===== */
-.calendar-card { padding: 22px; }
+.calendar-card { padding: 22px; display: flex; flex-direction: column; height: 100%; }
 .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; position: relative; }
 .cal-title { font-size: 22px; font-weight: 800; letter-spacing: -.3px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-radius: 10px; padding: 4px 10px 4px 4px; margin: -4px -10px -4px -4px; transition: background .15s; }
 .cal-title:hover { background: var(--fill-mid); }
@@ -291,7 +294,7 @@ body {
 .weekday { text-align: center; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 1px; overflow: hidden; }
 .weekend-label { color: var(--weekend-soft); }
 
-.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; flex: 1 1 auto; min-height: 0; grid-auto-rows: minmax(96px, 1fr); }
 .grid.no-weekend { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .weekdays.no-weekend { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .cell {
@@ -388,7 +391,7 @@ body {
 .task-row-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .task-note-preview {
   font-size: 12px; color: var(--muted); padding-left: 29px;                 /* 29px = check 19px + gap 10px，与标题对齐 */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  white-space: normal; overflow-wrap: anywhere;
 }
 .task-row:hover { background: var(--fill-hover-strong); transform: translateX(2px); box-shadow: 0 3px 10px rgba(var(--shadow-rgb),.1); }
 .task-row.done .t { text-decoration: line-through; color: var(--muted); }
@@ -713,3 +716,24 @@ body[data-theme="dark"] {
 .avatar-actions .ghost-btn { flex: none; width: 100%; }
 .ghost-btn.danger-ghost { color: #e11d48; border-color: rgba(244,63,94,.35); }
 .ghost-btn.danger-ghost:hover { background: rgba(244,63,94,.08); }
+/* ===== 左右栏容器查询：窄卡内容自适应（倒计时四段始终完整显示，折行不裁切） ===== */
+@container (max-width: 300px) {
+  /* 倒计时一行完整显示 + 字号随容器宽连续缩放（cqw）：
+     锚点 300px 容器 = 32/24px 原样，220px 容器 = 20/16px，中间线性连续 */
+  .gc-count { gap: 2px; }  /* flex-wrap 默认 nowrap，无需显式声明 */
+  .gc-count .gc-unit b { font-size: calc(10cqw - 6px); }
+  .gc-count .gc-unit:first-child b { font-size: calc(15cqw - 13px); }
+  .gc-count .gc-unit span { font-size: calc(1.25cqw + 7.25px); }
+  .gc-count .gc-sep { font-size: calc(11.25cqw - 13.75px); }
+  .gc-head { flex-wrap: wrap; row-gap: 6px; }
+  .gc-date { background: none; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  .gc-meta { flex-wrap: wrap; row-gap: 3px; }
+  .today-big { font-size: 34px; }
+  .progress-label { flex-wrap: wrap; row-gap: 2px; }
+  .streak { flex-wrap: wrap; row-gap: 4px; }
+  .card-title { flex-wrap: wrap; row-gap: 4px; }
+}
+@container (max-width: 240px) {
+  /* 极限窄：仅再收今日大数字（倒计时 cqw 公式已连续覆盖全窄域） */
+  .today-big { font-size: 30px; }
+}
