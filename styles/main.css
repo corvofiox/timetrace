@@ -122,16 +122,16 @@ body {
 /* ===== 左栏 ===== */
 .side { display: flex; flex-direction: column; gap: 20px; container-type: inline-size; }
 .card { padding: 20px; }
-.card-title { font-size: 12px; font-weight: 600; letter-spacing: .8px; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+.card-title { font-size: clamp(10px, calc(2.5cqw + 4.5px), 13.5px); font-weight: 600; letter-spacing: .8px; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
 /* 今日卡 */
-.today-big { font-size: 40px; font-weight: 800; letter-spacing: -.5px; }
-.today-sub { color: var(--muted); font-size: 13px; margin: 4px 0 16px; }
-.progress-track { height: 8px; border-radius: 99px; background: rgba(var(--accent-rgb),.12); overflow: hidden; margin-bottom: 8px; }
+.today-big { font-size: clamp(28px, calc(15cqw - 5px), 49px); font-weight: 800; letter-spacing: -.5px; }
+.today-sub { color: var(--muted); font-size: clamp(11px, calc(2.5cqw + 5.5px), 14.5px); margin: 4px 0 16px; }
+.progress-track { height: clamp(6.5px, calc(1.875cqw + 2.375px), 9.2px); border-radius: 99px; background: rgba(var(--accent-rgb),.12); overflow: hidden; margin-bottom: 8px; }
 .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--indigo), var(--violet)); width: 0%; transition: width .35s ease; }
-.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.progress-label { display: flex; justify-content: space-between; font-size: clamp(10px, calc(2.5cqw + 4.5px), 13.5px); color: var(--muted); }
 .mini-tasks { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
-.mini-task { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink); cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; transition: background .15s; }
+.mini-task { display: flex; align-items: center; gap: 9px; font-size: clamp(11.5px, calc(2.5cqw + 6px), 15px); color: var(--ink); cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; transition: background .15s; }
 .mini-task .t { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .mini-task:hover { background: rgba(var(--accent-rgb),.08); }
 .mini-task:hover .dot-check { border-color: var(--indigo); }
@@ -139,24 +139,18 @@ body {
 .mini-task.done .dot-check { background: linear-gradient(135deg, var(--indigo), var(--violet)); border: none; }
 .mini-task.done .t { text-decoration: line-through; color: var(--muted); }
 
-/* 目标卡 */
-.goal-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed rgba(var(--accent-rgb),.18); }
-.goal-item:last-child { border-bottom: none; }
-.goal-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.goal-name { flex: 1; font-size: 13.5px; }
-.goal-days { font-size: 11.5px; color: var(--muted); background: var(--fill-chip); padding: 3px 8px; border-radius: 99px; }
-
 /* 连续打卡 */
 .streak { display: flex; align-items: center; gap: 12px; }
-.streak-fire { font-size: 26px; }
-.streak-num { font-size: 26px; font-weight: 800; background: linear-gradient(135deg, #f97316, #ef4444); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.streak-fire { font-size: clamp(20px, calc(7.5cqw + 3.5px), 30.5px); }
+.streak-longest { font-size: clamp(10px, calc(2.5cqw + 4.5px), 13.5px); color: var(--muted); }
+.streak-num { font-size: clamp(20px, calc(7.5cqw + 3.5px), 30.5px); font-weight: 800; background: linear-gradient(135deg, #f97316, #ef4444); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* 月度统计 */
 .ms-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 4px 0 14px; }
 .ms-cell { background: var(--fill); border: 1px solid var(--glass-border); border-radius: 11px; padding: 9px 12px; }
-.ms-num { font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1.2; }
-.ms-label { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
-.ms-chart { display: flex; align-items: flex-end; gap: 2px; height: 42px; }
+.ms-num { font-size: clamp(14px, calc(5cqw + 3px), 21px); font-weight: 800; color: var(--ink); line-height: 1.2; }
+.ms-label { font-size: clamp(9px, calc(1.875cqw + 4.875px), 11.6px); color: var(--muted); margin-top: 2px; }
+.ms-chart { display: flex; align-items: flex-end; gap: 2px; height: clamp(32px, calc(12.5cqw + 4.5px), 49.5px); }
 .ms-bar {
   flex: 1; min-width: 0; border-radius: 3px 3px 1px 1px;
   background: rgba(var(--accent-rgb),.22); transition: background .15s, transform .15s, filter .15s;
@@ -213,32 +207,32 @@ body {
   width: 100%; flex: none; min-width: 0; cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 9px;
   padding: 20px 16px; border: 1.5px dashed rgba(var(--accent-rgb),.4); border-radius: 18px;
-  color: var(--muted); font-size: 13.5px; font-weight: 600;
+  color: var(--muted); font-size: clamp(11.5px, calc(2.5cqw + 6px), 15px); font-weight: 600;
   background: var(--fill-ghost); transition: all .18s;
 }
 .goal-add:hover { border-color: var(--indigo); color: var(--indigo); background: rgba(var(--accent-rgb),.07); transform: translateY(-1px); }
-.ga-plus { font-size: 17px; font-weight: 700; line-height: 1; }
+.ga-plus { font-size: clamp(13px, calc(5cqw + 2px), 20px); font-weight: 700; line-height: 1; }
 .goal-card::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
   background: linear-gradient(180deg, var(--ga), var(--gb));
 }
-.gc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.gc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .gc-dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--ga), var(--gb)); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); }
-.gc-name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
-.gc-date { margin-left: auto; font-size: 11px; color: var(--muted); background: var(--fill-chip); padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.gc-name { flex: 1; min-width: 0; font-size: clamp(12px, calc(3.125cqw + 5.13px), 16.4px); font-weight: 700; white-space: nowrap; overflow: hidden; }
+.gc-date { margin-left: auto; flex-shrink: 0; font-size: clamp(9.5px, calc(1.875cqw + 5.38px), 12.2px); color: var(--muted); background: var(--fill-chip); padding: 2px 6px; border-radius: 99px; white-space: nowrap; }
 .gc-count { display: flex; align-items: baseline; gap: 5px; margin-bottom: 9px; }
 .gc-unit { flex: none; white-space: nowrap; }
-.gc-unit b { font-size: 24px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.gc-count .gc-unit:first-child b { font-size: 32px; }
-.gc-unit span { font-size: 11px; color: var(--muted); margin-left: 1px; }
-.gc-sep { color: var(--line); font-weight: 700; font-size: 20px; }
-.gc-meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+.gc-unit b { font-size: clamp(16px, calc(10cqw - 6px), 30px); font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.gc-count .gc-unit:first-child b { font-size: clamp(20px, calc(15cqw - 13px), 41px); }
+.gc-unit span { font-size: clamp(10px, calc(1.25cqw + 7.25px), 11.75px); color: var(--muted); margin-left: 1px; }
+.gc-sep { color: var(--line); font-weight: 700; font-size: clamp(11px, calc(11.25cqw - 13.75px), 26.75px); }
+.gc-meta { display: flex; justify-content: space-between; font-size: clamp(10px, calc(1.875cqw + 5.88px), 12.7px); color: var(--muted); margin-bottom: 8px; }
 .gc-meta span { display: inline-flex; align-items: center; gap: 5px; }
 .gc-meta .gm-dot { width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, var(--ga), var(--gb)); }
 .gc-foot { display: flex; align-items: center; gap: 12px; }
-.gc-track { flex: 1; height: 6px; border-radius: 99px; background: rgba(var(--accent-rgb),.12); overflow: hidden; }
+.gc-track { flex: 1; height: clamp(5px, calc(1.25cqw + 2.25px), 7px); border-radius: 99px; background: rgba(var(--accent-rgb),.12); overflow: hidden; }
 .gc-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--ga), var(--gb)); transition: width .5s ease; }
-.gc-pct { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gc-pct { font-size: clamp(10.5px, calc(2.5cqw + 5px), 14px); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ===== 日历主卡 ===== */
 .calendar-card { padding: 22px; display: flex; flex-direction: column; height: 100%; }
@@ -718,22 +712,11 @@ body[data-theme="dark"] {
 .ghost-btn.danger-ghost:hover { background: rgba(244,63,94,.08); }
 /* ===== 左右栏容器查询：窄卡内容自适应（倒计时四段始终完整显示，折行不裁切） ===== */
 @container (max-width: 300px) {
-  /* 倒计时一行完整显示 + 字号随容器宽连续缩放（cqw）：
-     锚点 300px 容器 = 32/24px 原样，220px 容器 = 20/16px，中间线性连续 */
-  .gc-count { gap: 2px; }  /* flex-wrap 默认 nowrap，无需显式声明 */
-  .gc-count .gc-unit b { font-size: calc(10cqw - 6px); }
-  .gc-count .gc-unit:first-child b { font-size: calc(15cqw - 13px); }
-  .gc-count .gc-unit span { font-size: calc(1.25cqw + 7.25px); }
-  .gc-count .gc-sep { font-size: calc(11.25cqw - 13.75px); }
-  .gc-head { flex-wrap: wrap; row-gap: 6px; }
-  .gc-date { background: none; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  /* 全元素字号 cqw 连续缩放已在基础规则接管（220→300→360 线性，clamp 钳制）；
+     窄域仅保留次要信息可换行（零裁剪铁律） */
+  .gc-count { gap: 2px; }
   .gc-meta { flex-wrap: wrap; row-gap: 3px; }
-  .today-big { font-size: 34px; }
   .progress-label { flex-wrap: wrap; row-gap: 2px; }
   .streak { flex-wrap: wrap; row-gap: 4px; }
   .card-title { flex-wrap: wrap; row-gap: 4px; }
-}
-@container (max-width: 240px) {
-  /* 极限窄：仅再收今日大数字（倒计时 cqw 公式已连续覆盖全窄域） */
-  .today-big { font-size: 30px; }
 }

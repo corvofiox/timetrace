@@ -431,8 +431,35 @@ function createGoalCard(goal){
   el.addEventListener('click', () => openGoalDrawer(el));
   initCountdown(el);
   $('#goal-add').insertAdjacentElement('beforebegin', el);
+  fitGoalName(el.querySelector('.gc-name'));
   return el;
 }
+
+// 目标卡标题单行适配：从 cqw 计算值起逐步缩小字号直至一行放下（下限 12px）
+// 方案 A：标题优先单行 + 日期钉右上；min 下限仍溢出 → 回退折行完整显示（零裁剪铁律兜底）
+function fitGoalName(el, min = 12){
+  el.style.fontSize = '';                    // 先清内联，恢复 cqw clamp 公式值
+  el.style.whiteSpace = '';                  // 清折行兜底，恢复 nowrap 重新适配
+  el.style.overflowWrap = '';
+  const base = parseFloat(getComputedStyle(el).fontSize);
+  if (!base || isNaN(base) || base <= 0) return;
+  let size = base;
+  while (el.scrollWidth > el.clientWidth && size - 0.5 >= min){
+    size -= 0.5;
+    el.style.fontSize = size + 'px';
+  }
+  if (el.scrollWidth > el.clientWidth){
+    // 极端长标题：min 下限仍放不下 → 回退多行完整显示（日期 flex-shrink:0 钉右上，互不挤压）
+    el.style.fontSize = '';
+    el.style.whiteSpace = 'normal';
+    el.style.overflowWrap = 'anywhere';
+  }
+}
+let fitGoalResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(fitGoalResizeTimer);
+  fitGoalResizeTimer = setTimeout(() => $$('.goal-card .gc-name').forEach(fitGoalName), 150);
+});
 
 // ===== 目标编辑 / 新建 =====
 function openGoalDrawer(card){
@@ -629,7 +656,7 @@ async function updateMonthStats(){
     const el = document.createElement('div');
     el.className = 'ms-bar' + (b.total && b.done === b.total ? ' full' : '') + ' clickable';
     el.title = `${b.label} · ${b.done}/${b.total}`;
-    el.style.height = (b.total ? Math.max(6, Math.round(b.done / b.total * 36)) : 3) + 'px';
+    el.style.height = (b.total ? Math.max(12, Math.round(b.done / b.total * 100)) : 7) + '%';  // 百分比：随 .ms-chart clamp 高度缩放，窄卡不溢出
     el.dataset.y = b.y; el.dataset.m = b.m;
     if (msGran === 'month') el.dataset.d = b.d;
     chart.appendChild(el);
