@@ -8,6 +8,7 @@ const {
   createdResponse, 
   successResponse, 
   conflictResponse,
+  errorResponse,
   serverErrorResponse
 } = require('../utils/response');
 const { ErrorCodes } = require('../utils/errors');
@@ -21,6 +22,7 @@ function createRefreshToken(payload, expiresIn) {
 }
 
 const { 
+  DB_TYPE,
   findUserByEmail, 
   findUserById, 
   getAllUsers,
@@ -31,8 +33,15 @@ const {
   rotateRefreshToken
 } = require('../models/database');
 
+// 头像落库：database.js 未导出用户更新接口，按 DB_TYPE 直接选用底层模型
+const avatarStore = DB_TYPE === 'sqlite' ? require('../models/sqliteDB') : require('../models/fileDB');
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_PASSWORD_LENGTH = 128;
+// 头像 dataURL 上限（字符串长度，含 data: 前缀）：512KB
+const MAX_AVATAR_SIZE = 512 * 1024;
+// data:image/(png|jpeg|webp);base64, 白名单（后缀大小写不敏感，i 标志）
+const AVATAR_DATA_URL_REGEX = /^data:image\/(png|jpeg|webp);base64,/i;
 
 exports.register = async (req, res) => {
   try {
@@ -308,6 +317,8 @@ exports.getMe = async (req, res) => {
     }
 
     const { password, ...userWithoutPassword } = user;
+    // avatar 统一暴露：无头像时为 null（fileDB 旧数据可能没有该字段）
+    userWithoutPassword.avatar = user.avatar ?? null;
 
     successResponse(res, { data: userWithoutPassword });
   } catch (error) {
@@ -317,6 +328,58 @@ exports.getMe = async (req, res) => {
     });
     
     return serverErrorResponse(res, '获取用户信息失败');
+  }
+};
+
+// 上传/删除头像：POST /api/auth/avatar（protect 保护）
+// body: { avatar: string } — 空字符串=删除头像；否则须为 data:image/(png|jpeg|webp);base64,<data> dataURL
+exports.updateAvatar = async (req, res) => {
+  try {
+    const { avatar } = req.body || {};
+
+    // 非字符串 → 400
+    if (typeof avatar !== 'string') {
+      return validationErrorResponse(res, '头像必须是字符串', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'avatar',
+        reason: 'must_be_string',
+        actualType: typeof avatar
+      });
+    }
+
+    // 空字符串 = 删除头像（落库为 NULL，getMe 返回 null）
+    if (avatar === '') {
+      await avatarStore.users.updateAvatar(req.user.id, null);
+      return successResponse(res, { avatar: null });
+    }
+
+    // 长度超限 → 413（复用现有错误响应结构）
+    if (avatar.length > MAX_AVATAR_SIZE) {
+      return errorResponse(res, '头像数据不能超过512KB', 413, ErrorCodes.VALIDATION_LENGTH, {
+        field: 'avatar',
+        reason: 'max_length',
+        maxLength: MAX_AVATAR_SIZE,
+        actualLength: avatar.length
+      });
+    }
+
+    // data:image/(png|jpeg|webp);base64, 白名单校验，非法 → 400
+    if (!AVATAR_DATA_URL_REGEX.test(avatar)) {
+      return validationErrorResponse(res, '头像必须是 data:image/(png|jpeg|webp);base64 格式的图片', ErrorCodes.VALIDATION_FORMAT, {
+        field: 'avatar',
+        reason: 'invalid_format',
+        allowedTypes: ['image/png', 'image/jpeg', 'image/webp']
+      });
+    }
+
+    await avatarStore.users.updateAvatar(req.user.id, avatar);
+    return successResponse(res, { avatar });
+  } catch (error) {
+    console.error('[更新头像失败]', {
+      error: error.message,
+      userId: req.user?.id
+    });
+
+    return serverErrorResponse(res, '更新头像失败');
   }
 };
 

@@ -308,3 +308,130 @@ describe('Days API integration', () => {
     expect(res.body.errorCode).toBe('DAY_006');
   });
 });
+
+// ── Avatar API ──
+// 说明：每个用例用独立的 X-Forwarded-For 模拟不同客户端 IP，避免累计触发 server.js 中
+// /api/auth 的 20 次/15分钟 限流（express-rate-limit 按 req.ip 计数，trust proxy 信任 loopback 时取 XFF）
+describe('Avatar API', () => {
+  const uniqueEmail = () => `avatar-${Date.now()}-${emailCounter}-${Math.random().toString(36).slice(2)}@example.com`;
+  const fakeIp = () => `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+  const validAvatar = 'data:image/png;base64,' + Buffer.from('fake-png-bytes-for-avatar-test').toString('base64');
+
+  test('POST /api/auth/avatar rejects missing token', async () => {
+    const res = await request(app)
+      .post('/api/auth/avatar')
+      .set('X-Forwarded-For', fakeIp())
+      .send({ avatar: validAvatar })
+      .expect(401);
+    expect(res.body.errorCode).toBe('AUTH_001');
+  });
+
+  test('POST /api/auth/avatar uploads valid data URL and GET /api/auth/me returns it', async () => {
+    const ip = fakeIp();
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Forwarded-For', ip)
+      .send({ username: 'avataruser', email: uniqueEmail(), password: 'password123' })
+      .expect(201);
+
+    const res = await request(app)
+      .post('/api/auth/avatar')
+      .set('X-Forwarded-For', ip)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ avatar: validAvatar })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.avatar).toBe(validAvatar);
+
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set('X-Forwarded-For', ip)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
+    expect(me.body.data.avatar).toBe(validAvatar);
+  });
+
+  test('POST /api/auth/avatar rejects avatar not in data:image whitelist', async () => {
+    const ip = fakeIp();
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Forwarded-For', ip)
+      .send({ username: 'avatarinvalid', email: uniqueEmail(), password: 'password123' })
+      .expect(201);
+
+    const res = await request(app)
+      .post('/api/auth/avatar')
+      .set('X-Forwarded-For', ip)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ avatar: 'data:text/plain;base64,aGVsbG8=' })
+      .expect(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.errorCode).toBe('VAL_002');
+  });
+
+  test('POST /api/auth/avatar rejects avatar over 512KB', async () => {
+    const ip = fakeIp();
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Forwarded-For', ip)
+      .send({ username: 'avatarbig', email: uniqueEmail(), password: 'password123' })
+      .expect(201);
+
+    const oversized = 'data:image/png;base64,' + 'A'.repeat(512 * 1024);
+    const res = await request(app)
+      .post('/api/auth/avatar')
+      .set('X-Forwarded-For', ip)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ avatar: oversized })
+      .expect(413);
+    expect(res.body.success).toBe(false);
+    expect(res.body.errorCode).toBe('VAL_003');
+  });
+
+  test('POST /api/auth/avatar rejects non-string avatar', async () => {
+    const ip = fakeIp();
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Forwarded-For', ip)
+      .send({ username: 'avatartype', email: uniqueEmail(), password: 'password123' })
+      .expect(201);
+
+    const res = await request(app)
+      .post('/api/auth/avatar')
+      .set('X-Forwarded-For', ip)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ avatar: 12345 })
+      .expect(400);
+    expect(res.body.errorCode).toBe('VAL_002');
+  });
+
+  test('POST /api/auth/avatar with empty string deletes avatar (me returns null)', async () => {
+    const ip = fakeIp();
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .set('X-Forwarded-For', ip)
+      .send({ username: 'avatardel', email: uniqueEmail(), password: 'password123' })
+      .expect(201);
+    const authHeaders = { 'X-Forwarded-For': ip, Authorization: `Bearer ${reg.body.token}` };
+
+    await request(app)
+      .post('/api/auth/avatar')
+      .set(authHeaders)
+      .send({ avatar: validAvatar })
+      .expect(200);
+
+    const del = await request(app)
+      .post('/api/auth/avatar')
+      .set(authHeaders)
+      .send({ avatar: '' })
+      .expect(200);
+    expect(del.body.success).toBe(true);
+    expect(del.body.avatar).toBeNull();
+
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set(authHeaders)
+      .expect(200);
+    expect(me.body.data.avatar).toBeNull();
+  });
+});

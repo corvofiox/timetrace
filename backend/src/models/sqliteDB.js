@@ -32,9 +32,16 @@ const init = () => {
       username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
+      avatar TEXT,
       createdAt TEXT NOT NULL
     );
   `);
+
+  // 旧库迁移：users 表缺少 avatar 列时补列（幂等：已存在则跳过，重启不报错）
+  const userColumns = db.pragma('table_info(users)').map(col => col.name);
+  if (!userColumns.includes('avatar')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
+  }
 
   // 目标表
   db.exec(`
@@ -144,6 +151,12 @@ const users = {
       password: userData.password,
       createdAt: deserializeDate(now)
     };
+  },
+
+  // 更新头像（avatar 为 null 表示删除头像）
+  updateAvatar: (id, avatar) => {
+    const result = db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatar, id);
+    return result.changes > 0;
   }
 };
 
@@ -295,24 +308,49 @@ const days = {
 
     if (keywords.length === 0) return [];
 
+    // 候选行：有 summary 或 tasks 的行都可能命中（摘要全文 / 任务标题）
     let rows;
     if (userId) {
-      rows = db.prepare('SELECT * FROM days WHERE userId = ? AND summary IS NOT NULL').all(userId);
+      rows = db.prepare('SELECT * FROM days WHERE userId = ? AND (summary IS NOT NULL OR tasks IS NOT NULL)').all(userId);
     } else {
-      rows = db.prepare('SELECT * FROM days WHERE summary IS NOT NULL').all();
+      rows = db.prepare('SELECT * FROM days WHERE summary IS NOT NULL OR tasks IS NOT NULL').all();
     }
 
-    const results = rows
-      .filter(row => {
+    const results = [];
+
+    rows.forEach(row => {
+      // 摘要命中：保持原语义 type: 'summary'
+      if (row.summary) {
         const summaryLower = row.summary.toLowerCase();
-        return keywords.every(k => summaryLower.includes(k));
-      })
-      .map(row => ({
-        date: row.date,
-        content: row.summary,
-        type: 'summary'
-      }))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (keywords.every(k => summaryLower.includes(k))) {
+          results.push({
+            date: row.date,
+            content: row.summary,
+            type: 'summary'
+          });
+        }
+      }
+
+      // 任务标题命中：任一任务标题包含全部关键词即输出一条 type: 'task'
+      const tasks = safeJsonParse(row.tasks, []);
+      if (Array.isArray(tasks)) {
+        tasks.forEach(task => {
+          if (task && typeof task.title === 'string') {
+            const titleLower = task.title.toLowerCase();
+            if (keywords.every(k => titleLower.includes(k))) {
+              results.push({
+                date: row.date,
+                content: task.title,
+                type: 'task'
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // 结果统一按日期倒序（同日 summary 与任务都命中时输出两条记录）
+    results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return results;
   },

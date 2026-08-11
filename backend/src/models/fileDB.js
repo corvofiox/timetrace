@@ -194,6 +194,21 @@ const users = {
       return allUsers;
     });
     return savedUser;
+  },
+
+  // 更新头像（avatar 为 null 表示删除头像；users.json 为动态字段，无迁移需求）
+  updateAvatar: async (id, avatar) => {
+    const idStr = id.toString();
+    let updated = false;
+    await atomicUpdate(USERS_FILE, (allUsers) => {
+      const index = allUsers.findIndex(user => user.id.toString() === idStr);
+      if (index !== -1) {
+        allUsers[index] = { ...allUsers[index], avatar };
+        updated = true;
+      }
+      return allUsers;
+    });
+    return updated;
   }
 };
 
@@ -331,9 +346,12 @@ const days = {
       .split(/\s+/)  // 按空格拆分
       .filter(word => word.length > 0);  // 过滤掉空字符串
     
+    // 与 sqliteDB 语义对齐：空关键词直接返回空结果
+    if (keywords.length === 0) return [];
+
     const results = [];
     
-    // 搜索每日备注
+    // 搜索每日备注（摘要命中保持 type: 'summary'）
     filteredDays.forEach(day => {
       if (day.summary) {
         const summaryLower = day.summary.toLowerCase();
@@ -351,9 +369,28 @@ const days = {
           });
         }
       }
+
+      // 搜索任务标题：任一任务标题包含全部关键词即输出一条 type: 'task'
+      if (Array.isArray(day.tasks)) {
+        day.tasks.forEach(task => {
+          if (task && typeof task.title === 'string') {
+            const titleLower = task.title.toLowerCase();
+            const allKeywordsMatch = keywords.every(keyword =>
+              titleLower.includes(keyword)
+            );
+            if (allKeywordsMatch) {
+              results.push({
+                date: day.date,
+                content: task.title,
+                type: 'task'
+              });
+            }
+          }
+        });
+      }
     });
     
-    // 按日期排序（最新的在前）
+    // 按日期排序（最新的在前；同日 summary 与任务都命中时输出两条记录）
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
     
     return results;

@@ -18,7 +18,7 @@ const {
 const { ErrorCodes } = require('../utils/errors');
 const { sanitizeBody } = require('../middleware/errorHandler');
 
-const COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+const COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})(,#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3}))?$/;
 const MAX_TITLE_LENGTH = 100;
 
 exports.getGoals = async (req, res) => {
@@ -134,7 +134,7 @@ exports.createGoal = async (req, res) => {
     }
 
     if (color && !COLOR_REGEX.test(color)) {
-      return validationErrorResponse(res, '颜色格式无效，请使用 #RRGGBB 格式', ErrorCodes.GOAL_COLOR_INVALID, {
+      return validationErrorResponse(res, '颜色格式无效，请使用 #RRGGBB 或 #RRGGBB,#RRGGBB 格式', ErrorCodes.GOAL_COLOR_INVALID, {
         field: 'color',
         reason: 'invalid_format',
         expected: '#RRGGBB or #RGB'
@@ -227,7 +227,7 @@ exports.updateGoal = async (req, res) => {
     }
 
     if (color !== undefined && color !== '' && !COLOR_REGEX.test(color)) {
-      return validationErrorResponse(res, '颜色格式无效，请使用 #RRGGBB 格式', ErrorCodes.GOAL_COLOR_INVALID, {
+      return validationErrorResponse(res, '颜色格式无效，请使用 #RRGGBB 或 #RRGGBB,#RRGGBB 格式', ErrorCodes.GOAL_COLOR_INVALID, {
         field: 'color',
         reason: 'invalid_format',
         expected: '#RRGGBB or #RGB'
